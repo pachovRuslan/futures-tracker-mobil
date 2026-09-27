@@ -1,18 +1,23 @@
 import { REVENUECAT_API_KEY } from "@/shared/config";
 import { Platform } from "react-native";
 import Purchases from "react-native-purchases";
-
 export async function initRevenueCat() {
-  // Временно отключаем инициализацию, если ключа нет или мы в вебе
+  // Пропускаем инициализацию, если нет ключа, мы в вебе или в Expo Go
   if (!REVENUECAT_API_KEY || Platform.OS === "web") {
-    console.log(
-      "RevenueCat: инициализация пропущена (нет ключа или веб-среда)",
-    );
+    return;
+  }
+
+  // Проверяем, запущены ли мы в Expo Go
+  const isExpoGo = Constants.appOwnership === "expo";
+  if (isExpoGo) {
+    console.log("RevenueCat: пропуск инициализации в Expo Go");
     return;
   }
 
   try {
-    await Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+    const apiKey =
+      Platform.OS === "ios" ? REVENUECAT_API_KEY : REVENUECAT_API_KEY;
+    await Purchases.configure({ apiKey });
   } catch (e) {
     console.log(
       "RevenueCat: ошибка инициализации (игнорируем в режиме разработки)",

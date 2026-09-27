@@ -15,7 +15,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (loading) return;
-    const inAuthGroup = segments[0] === "login";
+    const inAuthGroup = segments[0] === "login" || segments[0] === "auth";
     if (!user && !inAuthGroup) {
       router.replace("/login");
     } else if (user && inAuthGroup) {
@@ -28,6 +28,7 @@ export default function RootLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="login" />
+      <Stack.Screen name="auth/callback" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="paywall" />
       <Stack.Screen name="connections" />

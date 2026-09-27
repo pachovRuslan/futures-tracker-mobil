@@ -1,31 +1,36 @@
 import { supabase } from "@/services/auth";
 import { colors } from "@/theme/colors";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 export default function AuthCallback() {
-  const params = useLocalSearchParams();
   const router = useRouter();
 
   useEffect(() => {
-    const handleCallback = async () => {
-      // В Expo Router параметры URL доступны в useLocalSearchParams
-      const code = params.code as string;
+    console.log("Callback screen mounted. Waiting for session...");
 
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (!error) {
+    // Подписываемся на изменения сессии
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        console.log("Auth event:", event);
+
+        if (event === "SIGNED_IN" && session) {
+          console.log("User signed in:", session.user?.email);
+          authListener.subscription.unsubscribe();
           router.replace("/");
-          return;
+        } else if (event === "SIGNED_OUT") {
+          authListener.subscription.unsubscribe();
+          router.replace("/login");
         }
-      }
-      // Если ошибка или нет кода — возвращаем на логин
-      router.replace("/login");
-    };
+      },
+    );
 
-    handleCallback();
-  }, [params, router]);
+    // Очистка подписки при размонтировании
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [router]);
 
   return (
     <View style={styles.container}>

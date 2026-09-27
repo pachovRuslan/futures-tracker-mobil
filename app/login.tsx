@@ -5,12 +5,20 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 export default function LoginScreen() {
   const { login } = useAuth();
 
+  const handleLogin = async () => {
+    try {
+      await login();
+    } catch (e) {
+      console.error("Login error:", e);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.card}>
         <Text style={styles.title}>FUTURES TRACKER</Text>
         <Text style={styles.subtitle}>Личный трекер фьючерсных сделок</Text>
-        <TouchableOpacity style={styles.button} onPress={login}>
+        <TouchableOpacity style={styles.button} onPress={handleLogin}>
           <Text style={styles.buttonText}>Войти через Google</Text>
         </TouchableOpacity>
         <Text style={styles.hint}>

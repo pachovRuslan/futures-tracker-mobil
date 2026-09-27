@@ -1,71 +1,42 @@
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/shared/config.ts";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/shared/config";
 import { createClient } from "@supabase/supabase-js";
 import { makeRedirectUri } from "expo-auth-session";
 import * as SecureStore from "expo-secure-store";
+import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
-
-// Безопасный адаптер для хранилища Supabase.
-// На телефоне использует SecureStore, в браузере — localStorage,
-// на сервере (Node.js при сборке) — память.
-const memoryStorage: Record<string, string> = {};
+import "react-native-url-polyfill/auto"; // ВАЖНО: должен быть первым
 
 const safeStorage = {
   getItem: async (key: string): Promise<string | null> => {
     try {
-      if (
-        typeof window !== "undefined" &&
-        typeof window.localStorage !== "undefined"
-      ) {
-        return window.localStorage.getItem(key);
-      }
       if (
         typeof SecureStore !== "undefined" &&
         typeof SecureStore.getItemAsync === "function"
       ) {
         return await SecureStore.getItemAsync(key);
       }
-    } catch (e) {
-      // ignore
-    }
-    return memoryStorage[key] ?? null;
+    } catch (e) {}
+    return null;
   },
   setItem: async (key: string, value: string): Promise<void> => {
     try {
-      if (
-        typeof window !== "undefined" &&
-        typeof window.localStorage !== "undefined"
-      ) {
-        return window.localStorage.setItem(key, value);
-      }
       if (
         typeof SecureStore !== "undefined" &&
         typeof SecureStore.setItemAsync === "function"
       ) {
         return await SecureStore.setItemAsync(key, value);
       }
-    } catch (e) {
-      // ignore
-    }
-    memoryStorage[key] = value;
+    } catch (e) {}
   },
   removeItem: async (key: string): Promise<void> => {
     try {
-      if (
-        typeof window !== "undefined" &&
-        typeof window.localStorage !== "undefined"
-      ) {
-        return window.localStorage.removeItem(key);
-      }
       if (
         typeof SecureStore !== "undefined" &&
         typeof SecureStore.deleteItemAsync === "function"
       ) {
         return await SecureStore.deleteItemAsync(key);
       }
-    } catch (e) {
-      // ignore
-    }
-    delete memoryStorage[key];
+    } catch (e) {}
   },
 };
 
@@ -82,29 +53,41 @@ export async function signInWithGoogle() {
   const redirectUrl = makeRedirectUri({ path: "auth/callback" });
   console.log("МОЙ REDIRECT URL:", redirectUrl);
 
-  // Используем skipBrowserRedirect: true, чтобы контролировать процесс самим
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
-  });
-
-  if (error) throw error;
-
   if (Platform.OS === "web") {
-    // ВЕБ: Принудительно делаем редирект страницы на URL Google
-    if (data.url) {
-      window.location.href = data.url;
-    }
-    return null; // Функция прервется здесь, страница перезагрузится
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: redirectUrl },
+    });
+    if (error) throw error;
+    return null;
   } else {
-    // ТЕЛЕФОН (Expo Go): Открываем встроенный браузер
+    // Телефон: используем PKCE Flow
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: redirectUrl,
+        skipBrowserRedirect: true,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
+    });
+
+    if (error) throw error;
+
+    // Открываем встроенный браузер
     const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+
     if (res.type !== "success") throw new Error("Auth cancelled");
 
+    // Парсим URL, который вернулся
     const url = new URL(res.url);
     const code = url.searchParams.get("code");
-    if (!code) throw new Error("No auth code");
 
+    if (!code) throw new Error("No auth code in redirect URL");
+
+    // Обмениваем код на сессию
     const { data: session, error: sessionError } =
       await supabase.auth.exchangeCodeForSession(code);
     if (sessionError) throw sessionError;
