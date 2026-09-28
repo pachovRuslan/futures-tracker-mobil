@@ -2,11 +2,6 @@
   "name": "futures-tracker-mobile",
   "main": "expo-router/entry",
   "version": "1.0.0",
-  "pnpm": {
-    "overrides": {
-      "browserslist": "4.28.0"
-    }
-  },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
     "date-fns": "^4.4.0",
