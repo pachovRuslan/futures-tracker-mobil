@@ -1,4 +1,9 @@
-import { getCurrentUser, signInWithGoogle, signOut } from "@/services/auth";
+import {
+  getCurrentUser,
+  signInWithGoogle,
+  signOut,
+  supabase,
+} from "@/services/auth";
 import { useCallback, useEffect, useState } from "react";
 
 export function useAuth() {
@@ -10,6 +15,19 @@ export function useAuth() {
       .then(setUser)
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        console.log("[useAuth] event:", event, "email:", session?.user?.email);
+        if (event === "SIGNED_IN" && session?.user) {
+          setUser(session.user);
+        } else if (event === "SIGNED_OUT") {
+          setUser(null);
+        }
+      },
+    );
+
+    return () => authListener.subscription.unsubscribe();
   }, []);
 
   const login = useCallback(async () => {

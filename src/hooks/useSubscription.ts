@@ -1,20 +1,45 @@
-import { getSubscriptionStatus } from "@/services/subscriptions";
+import { useAuth } from "@/hooks/useAuth";
+import { checkPremiumStatus, type Entitlement } from "@/services/entitlements";
 import { useCallback, useEffect, useState } from "react";
 
 export function useSubscription() {
-  const [isPremium, setIsPremium] = useState(false);
+  const { user } = useAuth();
+  const [entitlement, setEntitlement] = useState<Entitlement | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const check = useCallback(async () => {
+  const refresh = useCallback(async () => {
     setLoading(true);
-    const status = await getSubscriptionStatus();
-    setIsPremium(status);
-    setLoading(false);
+    try {
+      const status = await checkPremiumStatus();
+      console.log("[useSubscription] status:", {
+        isPremium: status.isPremium,
+        source: status.source,
+        note: status.note,
+      });
+      setEntitlement(status);
+    } catch (e) {
+      console.error("[useSubscription] refresh error:", e);
+      setEntitlement(null);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  // Перезапускать при смене пользователя
   useEffect(() => {
-    check();
-  }, [check]);
+    if (user?.id) {
+      console.log("[useSubscription] user changed, refreshing:", user.id);
+      refresh();
+    } else {
+      setEntitlement(null);
+      setLoading(false);
+    }
+  }, [user?.id, refresh]);
 
-  return { isPremium, loading, check };
+  return {
+    isPremium: entitlement?.isPremium ?? false,
+    entitlement,
+    loading,
+    refresh,
+  };
 }

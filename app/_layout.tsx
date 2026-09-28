@@ -1,6 +1,6 @@
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { useAuth } from "@/hooks/useAuth";
-import { initRevenueCat } from "@/services/subscriptions";
+import { initSubscriptions } from "@/services/subscriptions";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
 
@@ -10,12 +10,21 @@ export default function RootLayout() {
   const router = useRouter();
 
   useEffect(() => {
-    initRevenueCat();
+    initSubscriptions().catch((e) => {
+      console.error("Subscriptions init failed (non-fatal):", e);
+    });
   }, []);
 
   useEffect(() => {
     if (loading) return;
+
+    // Не редиректить с callback экрана — там разрулит callback.tsx
+    if (segments[0] === "auth" && segments[1] === "callback") {
+      return;
+    }
+
     const inAuthGroup = segments[0] === "login" || segments[0] === "auth";
+
     if (!user && !inAuthGroup) {
       router.replace("/login");
     } else if (user && inAuthGroup) {

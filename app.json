@@ -4,21 +4,19 @@
     "slug": "futures-tracker-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "scheme": "futurestracker",
     "userInterfaceStyle": "dark",
     "splash": {
       "backgroundColor": "#0a0d12"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourname.futurestracker"
+      "bundleIdentifier": "com.pachovruslan.futurestracker"
     },
     "android": {
+      "package": "com.pachovruslan.futurestracker",
       "adaptiveIcon": {
         "backgroundColor": "#0a0d12"
-      },
-      "package": "com.yourname.futurestracker"
+      }
     },
     "web": {
       "bundler": "metro",
@@ -30,8 +28,9 @@
         "origin": false
       },
       "eas": {
-        "projectId": ""
+        "projectId": "8ac0dd8b-caa7-417c-9a7a-709a8b4fb353"
       }
-    }
+    },
+    "scheme": "futurestracker"
   }
 }
