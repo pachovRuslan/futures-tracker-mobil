@@ -12,6 +12,9 @@
       },
       "ios": {
         "simulator": true
+      },
+      "env": {
+        "EXPO_NO_SUPPLY_CHAIN_POLICY": "1"
       }
     },
     "preview": {
@@ -21,6 +24,9 @@
       },
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_NO_SUPPLY_CHAIN_POLICY": "1"
       }
     },
     "production": {
@@ -29,6 +35,9 @@
       },
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_NO_SUPPLY_CHAIN_POLICY": "1"
       }
     }
   },

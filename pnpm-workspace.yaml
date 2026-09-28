@@ -3,3 +3,13 @@ packages:
 
 overrides:
   browserslist: 4.28.0
+  # Понижаем версии пакетов, которые EAS supply-chain policy считает "слишком свежими".
+  # caniuse-lite 1.0.30001813 опубликован 2026-09-28 — блокируется политикой.
+  # 1.0.30001812 — предыдущая версия, проходит проверку.
+  caniuse-lite: 1.0.30001812
+  # regenerate-unicode-properties 10.3.0 опубликован 2026-09-28 — блокируется.
+  # 10.2.0 — предыдущая мажорная версия, проходит проверку.
+  regenerate-unicode-properties: 10.2.0
+
+# EAS игнорирует .npmrc minimumReleaseAge, использует свою политику.
+# Отключаем через EXPO_NO_SUPPLY_CHAIN_POLICY=1 в eas.json env.
