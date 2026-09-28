@@ -7,36 +7,61 @@ import { Platform } from "react-native";
 import "react-native-url-polyfill/auto";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Safe storage (web fallback)
+// Safe storage (web → localStorage, native → SecureStore)
 // ─────────────────────────────────────────────────────────────────────────────
+//
+// ВАЖНО: ранее на вебе safeStorage был no-op (getItem возвращал null, setItem
+// ничего не делал). Это ломало persistence сессии Supabase: после SIGNED_IN
+// сессия не сохранялась, и следующий getSession() возвращал null — приложение
+// "забывало" пользователя при перезагрузке страницы или новом монтировании.
+// Теперь на вебе используется localStorage.
 
 const safeStorage = {
   getItem: async (key: string): Promise<string | null> => {
     try {
-      if (Platform.OS !== "web" && SecureStore?.getItemAsync) {
+      if (Platform.OS === "web") {
+        // На вебе localStorage может быть недоступен в SSR / инкогнито.
+        if (typeof window !== "undefined" && window.localStorage) {
+          return window.localStorage.getItem(key);
+        }
+        return null;
+      }
+      if (SecureStore?.getItemAsync) {
         return await SecureStore.getItemAsync(key);
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      console.warn("[safeStorage] getItem error:", e);
     }
     return null;
   },
   setItem: async (key: string, value: string): Promise<void> => {
     try {
-      if (Platform.OS !== "web" && SecureStore?.setItemAsync) {
+      if (Platform.OS === "web") {
+        if (typeof window !== "undefined" && window.localStorage) {
+          window.localStorage.setItem(key, value);
+        }
+        return;
+      }
+      if (SecureStore?.setItemAsync) {
         return await SecureStore.setItemAsync(key, value);
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      console.warn("[safeStorage] setItem error:", e);
     }
   },
   removeItem: async (key: string): Promise<void> => {
     try {
-      if (Platform.OS !== "web" && SecureStore?.deleteItemAsync) {
+      if (Platform.OS === "web") {
+        if (typeof window !== "undefined" && window.localStorage) {
+          window.localStorage.removeItem(key);
+        }
+        return;
+      }
+      if (SecureStore?.deleteItemAsync) {
         return await SecureStore.deleteItemAsync(key);
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      console.warn("[safeStorage] removeItem error:", e);
     }
   },
 };
