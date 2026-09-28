@@ -12,9 +12,18 @@ export function useAuth() {
 
   useEffect(() => {
     getCurrentUser()
-      .then(setUser)
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
+      .then((u) => {
+        console.log("[useAuth] initial getCurrentUser:", u?.id ?? "null", u?.email ?? "");
+        setUser(u);
+      })
+      .catch((e) => {
+        console.log("[useAuth] initial getCurrentUser failed:", e);
+        setUser(null);
+      })
+      .finally(() => {
+        console.log("[useAuth] loading=false");
+        setLoading(false);
+      });
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (event, session) => {

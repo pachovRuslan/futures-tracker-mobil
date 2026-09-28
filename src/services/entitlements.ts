@@ -26,12 +26,14 @@ export async function fetchEntitlement(): Promise<Entitlement> {
       data: { user },
     } = await supabase.auth.getUser();
 
-    console.log("[Entitlements] user:", user?.id, user?.email);
+    console.log("[Entitlements] fetchEntitlement() called, user:", user?.id ?? "null", user?.email ?? "");
 
     if (!user) return EMPTY;
 
+    console.log("[Entitlements] calling RPC get_my_entitlement...");
     const { data, error } = await supabase.rpc("get_my_entitlement");
 
+    console.log("[Entitlements] RPC raw result:", JSON.stringify(data));
     console.log("[Entitlements] RPC:", {
       data,
       error: error ? { message: error.message, code: error.code } : null,
