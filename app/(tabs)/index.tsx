@@ -6,6 +6,7 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -125,7 +126,13 @@ export default function DashboardScreen() {
       router.push("/paywall");
       return;
     }
-    router.push("/trade/new");
+    // ЭКРАН /trade/new ЕЩЁ НЕ СОЗДАН — это заглушка.
+    // Когда создашь app/trade/new.tsx, замени Alert на router.push("/trade/new").
+    Alert.alert(
+      "В разработке",
+      "Экран добавления сделки ещё не реализован. Создайте app/trade/new.tsx.",
+    );
+    // router.push("/trade/new");
   }, [isPremium, stats, router]);
 
   const handleAddExchange = useCallback(() => {

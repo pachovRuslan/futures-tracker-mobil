@@ -18,12 +18,16 @@ export default function RootLayout() {
   useEffect(() => {
     if (loading) return;
 
-    // Не редиректить с callback экрана — там разрулит callback.tsx
-    if (segments[0] === "auth" && segments[1] === "callback") {
+    // Не редиректить с callback экрана — там разрулит callback.tsx.
+    // useSegments возвращает tuple с variadic-типом; приводим к string[],
+    // чтобы безопасно индексировать.
+    const seg = segments as readonly string[];
+
+    if (seg.length >= 2 && seg[0] === "auth" && seg[1] === "callback") {
       return;
     }
 
-    const inAuthGroup = segments[0] === "login" || segments[0] === "auth";
+    const inAuthGroup = seg[0] === "login" || seg[0] === "auth";
 
     if (!user && !inAuthGroup) {
       router.replace("/login");

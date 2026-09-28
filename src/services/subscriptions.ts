@@ -1,4 +1,4 @@
-import Constants from "expo-constants";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import { Platform } from "react-native";
 
 /**
@@ -57,9 +57,10 @@ interface PurchasesModule {
   restorePurchases: () => Promise<unknown>;
   setLogLevel: (level: string) => void;
   LOG_LEVEL: {
+    VERBOSE: string;
     DEBUG: string;
     INFO: string;
-    WARNING: string;
+    WARN: string;
     ERROR: string;
   };
 }
@@ -68,7 +69,10 @@ interface PurchasesModule {
 // Определение окружения
 // ─────────────────────────────────────────────────────────────────────────────
 
-const isExpoGo = Constants.executionEnvironment === "store";
+// Expo Go uses ExecutionEnvironment.StoreClient ("storeClient").
+// Comparing to "store" was a bug — that value never exists in the enum.
+const isExpoGo =
+  Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 const isWeb = Platform.OS === "web";
 const isStandaloneNative = !isExpoGo && !isWeb;
 
@@ -90,7 +94,6 @@ const isRevenueCatAvailable =
 // Состояние
 // ─────────────────────────────────────────────────────────────────────────────
 
-let _initialized = false;
 let _initPromise: Promise<void> | null = null;
 let _purchases: PurchasesModule | null = null;
 let _currentState: SubscriptionState = {
@@ -205,7 +208,6 @@ export function initSubscriptions(): Promise<void> {
         `[Subscriptions] Skipped init — unavailable environment ` +
           `(expoGo=${isExpoGo}, web=${isWeb}, hasKey=${hasApiKey}, hasWebKey=${hasWebKey})`,
       );
-      _initialized = true;
       return;
     }
 
@@ -213,11 +215,11 @@ export function initSubscriptions(): Promise<void> {
       _purchases = await loadPurchasesModule();
       if (!_purchases) {
         console.warn("[Subscriptions] Module not loaded");
-        _initialized = true;
         return;
       }
 
-      // Минимальный лог для dev
+      // Минимальный лог для dev. Используем WARN (не WARNING) —
+      // это реальное имя поля в @revenuecat/purchases-typescript-internal LOG_LEVEL enum.
       if (__DEV__ && _purchases.setLogLevel) {
         try {
           _purchases.setLogLevel(_purchases.LOG_LEVEL?.INFO ?? "INFO");
@@ -244,14 +246,12 @@ export function initSubscriptions(): Promise<void> {
         console.warn("[Subscriptions] getCustomerInfo failed:", e);
       }
 
-      _initialized = true;
       console.log("[Subscriptions] RevenueCat initialized successfully");
     } catch (e) {
       console.error(
         "[Subscriptions] Init failed (continuing without premium):",
         e,
       );
-      _initialized = true;
     }
   })();
 
@@ -273,7 +273,7 @@ export function hasFeature(feature: PurchaseFeature): boolean {
 }
 
 /**
- * Сокращение для最常见的 isPremium.
+ * Сокращение для самого частого запроса — isPremium.
  */
 export function isPremiumUser(): boolean {
   return _currentState.isPremium;
@@ -454,7 +454,10 @@ export async function getOfferings(): Promise<Offerings> {
   try {
     const p = _purchases as PurchasesModule & {
       getOfferings?: () => Promise<{
-        current?: { availablePackages?: Array<Record<string, unknown>> };
+        current?: {
+          identifier?: string;
+          availablePackages?: Array<Record<string, unknown>>;
+        };
         all?: Record<
           string,
           { availablePackages?: Array<Record<string, unknown>> }

@@ -11,23 +11,33 @@ export default function AuthCallback() {
   useEffect(() => {
     console.log("Callback screen mounted. Waiting for session...");
 
+    let subscription: { unsubscribe: () => void } | null = null;
+
+    const handle = (next: "/" | "/login") => {
+      if (isHandled.current) return;
+      isHandled.current = true;
+      subscription?.unsubscribe();
+      subscription = null;
+      setTimeout(() => router.replace(next), 150);
+    };
+
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (event, session) => {
         console.log("[Callback] event:", event, "hasSession:", !!session);
 
         if (event === "INITIAL_SESSION") return;
-        if (isHandled.current) return;
-        isHandled.current = true;
 
-        if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
-          authListener.subscription.unsubscribe();
-          setTimeout(() => router.replace("/"), 150);
+        if (
+          (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") &&
+          session
+        ) {
+          handle("/");
         } else if (event === "SIGNED_OUT") {
-          authListener.subscription.unsubscribe();
-          router.replace("/login");
+          handle("/login");
         }
       },
     );
+    subscription = authListener.subscription;
 
     // Fallback на 5 секунд
     const fallbackTimer = setTimeout(async () => {
@@ -36,15 +46,12 @@ export default function AuthCallback() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      isHandled.current = true;
-      authListener.subscription.unsubscribe();
-      if (session) router.replace("/");
-      else router.replace("/login");
+      handle(session ? "/" : "/login");
     }, 5000);
 
     return () => {
-      authListener.subscription.unsubscribe();
       clearTimeout(fallbackTimer);
+      subscription?.unsubscribe();
     };
   }, [router]);
 

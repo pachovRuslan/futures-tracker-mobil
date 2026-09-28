@@ -19,7 +19,17 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const data = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(data.error ?? `HTTP ${res.status}`);
   }
-  return res.json();
+
+  // 204 No Content / пустое тело — не пытаемся парсить JSON,
+  // иначе fetch упадёт с SyntaxError: Unexpected end of JSON input.
+  if (res.status === 204) {
+    return undefined as T;
+  }
+  const text = await res.text();
+  if (!text) {
+    return undefined as T;
+  }
+  return JSON.parse(text) as T;
 }
 
 export const api = {

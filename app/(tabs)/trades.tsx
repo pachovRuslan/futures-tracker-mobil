@@ -1,19 +1,21 @@
 import { useTrades } from "@/hooks/useTrades";
-import { fmtDate, fmtPnl } from "@/shared/trade-model";
-import { EXCHANGE_LABELS } from "@/shared/types";
+import { fmtDate, fmtPnl, tradeNetPnl } from "@/shared/trade-model";
+import { EXCHANGE_LABELS, type Trade } from "@/shared/types";
 import { colors } from "@/theme/colors";
 import {
-    FlatList,
-    StyleSheet,
-    Text,
-    View
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 export default function TradesScreen() {
-  const { trades, loading, reload } = useTrades();
+  const { trades, loading, error, reload } = useTrades();
 
-  const renderItem = ({ item: t }: { item: any }) => {
-    const net = t.realized_pnl - t.fee + t.funding;
+  const renderItem = ({ item: t }: { item: Trade }) => {
+    const net = tradeNetPnl(t);
     return (
       <View style={styles.row}>
         <View style={styles.left}>
@@ -47,6 +49,27 @@ export default function TradesScreen() {
     );
   };
 
+  if (loading && trades.length === 0) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={styles.muted}>Загрузка сделок…</Text>
+      </View>
+    );
+  }
+
+  if (error && trades.length === 0) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.errorTitle}>Не удалось загрузить</Text>
+        <Text style={styles.muted}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={reload}>
+          <Text style={styles.retryButtonText}>Повторить</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <FlatList
@@ -56,7 +79,9 @@ export default function TradesScreen() {
         onRefresh={reload}
         refreshing={loading}
         contentContainerStyle={{ padding: 16, gap: 4 }}
-        ListEmptyComponent={<Text style={styles.empty}>Сделок пока нет</Text>}
+        ListEmptyComponent={
+          <Text style={styles.empty}>Сделок пока нет</Text>
+        }
       />
     </View>
   );
@@ -64,6 +89,24 @@ export default function TradesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.bg,
+    gap: 12,
+    padding: 24,
+  },
+  muted: { color: colors.textMuted, fontSize: 13 },
+  errorTitle: { fontSize: 16, fontWeight: "600", color: colors.text },
+  retryButton: {
+    marginTop: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: colors.accent,
+  },
+  retryButtonText: { color: "#fff", fontWeight: "600", fontSize: 13 },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",

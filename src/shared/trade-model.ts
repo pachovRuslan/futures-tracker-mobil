@@ -14,17 +14,21 @@ export function filterTradesByExchanges(
 export function calculateMonthStats(trades: Trade[], month: string) {
   const monthTrades = trades.filter((t) => t.closed_at.slice(0, 7) === month);
   const netPnls = monthTrades.map(tradeNetPnl);
+  // PnL > 0 — прибыль; PnL < 0 — убыток; PnL === 0 — ни то, ни другое
+  // (в нейтральные сделки не включаем ни в winCount, ни в lossCount).
   const winCount = netPnls.filter((p) => p > 0).length;
-  const lossCount = netPnls.filter((p) => p <= 0).length;
+  const lossCount = netPnls.filter((p) => p < 0).length;
+  const neutralCount = netPnls.filter((p) => p === 0).length;
   const total = monthTrades.length;
   return {
     tradesCount: total,
     winCount,
     lossCount,
+    neutralCount,
     winRate: total > 0 ? ((winCount / total) * 100).toFixed(1) : "0",
     netPnl: netPnls.reduce((a, b) => a + b, 0),
     grossProfit: netPnls.filter((p) => p > 0).reduce((a, b) => a + b, 0),
-    grossLoss: netPnls.filter((p) => p <= 0).reduce((a, b) => a + b, 0),
+    grossLoss: netPnls.filter((p) => p < 0).reduce((a, b) => a + b, 0),
     fee: monthTrades.reduce((acc, t) => acc + t.fee, 0),
     funding: monthTrades.reduce((acc, t) => acc + t.funding, 0),
   };

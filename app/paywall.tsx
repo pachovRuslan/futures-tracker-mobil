@@ -8,7 +8,7 @@ import {
 } from "@/services/subscriptions";
 import { colors } from "@/theme/colors";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -61,6 +61,13 @@ export default function PaywallScreen() {
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Локальный «тень» isPremium — нужен, чтобы handleRestore видел свежее
+  // значение сразу после await refresh(), не дожидаясь ре-рендера.
+  const isPremiumRef = useRef(isPremium);
+  useEffect(() => {
+    isPremiumRef.current = isPremium;
+  }, [isPremium]);
 
   // ─── Загрузка offerings ─────────────────────────────────────────────
   const loadOfferings = useCallback(async () => {
@@ -132,7 +139,9 @@ export default function PaywallScreen() {
     try {
       const ok = await restorePurchases();
       await refresh();
-      if (ok && isPremium) {
+      // Используем ref, чтобы получить актуальное значение сразу после refresh,
+      // а не stale-значение из замыкания useCallback.
+      if (ok && isPremiumRef.current) {
         Alert.alert("Готово!", "Покупки восстановлены.");
         router.replace("/");
       } else {
@@ -147,7 +156,7 @@ export default function PaywallScreen() {
       setLoadState("error");
       setErrorMsg("Не удалось восстановить покупки.");
     }
-  }, [isPremium, refresh, router]);
+  }, [refresh, router]);
 
   // ─── Memo: featured package (первый или самый дешёвый) ──────────────
   const featuredPackage = useMemo<OfferingPackage | null>(() => {

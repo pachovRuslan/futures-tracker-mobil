@@ -33,7 +33,9 @@ export interface MonthlySummary {
   totalFunding: number;
   netPnl: number;
   tradeCount: number;
-  winRate: number;
+  // Строка вида "87.5" (рассчитано через toFixed(1)) —
+  // соответствует возвращаемому значению calculateMonthStats в trade-model.ts.
+  winRate: string;
 }
 
 export interface BalanceSnapshot {
