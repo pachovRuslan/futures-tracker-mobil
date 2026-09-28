@@ -1,8 +1,11 @@
 import { API_URL } from "@/shared/config";
-import * as SecureStore from "expo-secure-store";
+import { safeStorage } from "@/services/auth";
 
 async function getToken(): Promise<string | null> {
-  return SecureStore.getItemAsync("access_token");
+  // Используем safeStorage из auth.ts — на вебе он работает через localStorage,
+  // на нативе через SecureStore. Раньше здесь был прямой SecureStore.getItemAsync,
+  // который падал на вебе с "getValueWithKeyAsync is not a function".
+  return safeStorage.getItem("access_token");
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
