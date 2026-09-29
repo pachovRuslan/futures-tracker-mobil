@@ -1,5 +1,6 @@
 import { supabase } from "@/services/auth";
 import { colors } from "@/theme/colors";
+import * as LinkingExpo from "expo-linking";
 import { useRouter } from "expo-router";
 import { useEffect, useRef } from "react";
 import { ActivityIndicator, Linking, StyleSheet, Text, View } from "react-native";
@@ -9,45 +10,27 @@ export default function AuthCallback() {
   const isHandled = useRef(false);
 
   useEffect(() => {
-    console.log("Callback screen mounted. Waiting for session...");
+    console.log("[Callback] screen mounted, isHandled:", isHandled.current);
 
     let subscription: { unsubscribe: () => void } | null = null;
+    let linkingSubscription: { remove: () => void } | null = null;
 
     const handle = (next: "/" | "/login") => {
       if (isHandled.current) return;
       isHandled.current = true;
+      console.log("[Callback] handle ->", next);
       subscription?.unsubscribe();
-      subscription = null;
+      linkingSubscription?.remove();
       setTimeout(() => router.replace(next), 150);
     };
 
-    // Функция для извлечения code из URL и обмена на сессию.
-    // ВАЖНО: в standalone APK приложение открывается через intent
-    // futurestracker://auth/callback?code=... — Linking.getInitialURL()
-    // возвращает этот URL. Supabase с detectSessionInUrl:false не обменивает
-    // код автоматически, поэтому делаем это вручную.
-    const processUrl = async (url: string | null) => {
-      if (!url) {
-        console.log("[Callback] no URL to process");
-        return false;
-      }
-
-      console.log("[Callback] processing URL:", url.slice(0, 120));
-
+    const exchangeCode = async (code: string): Promise<boolean> => {
+      console.log("[Callback] exchanging code for session...");
       try {
-        const parsedUrl = new URL(url);
-        const code = parsedUrl.searchParams.get("code");
-
-        if (!code) {
-          console.log("[Callback] no code in URL");
-          return false;
-        }
-
-        console.log("[Callback] found code, exchanging for session...");
         const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
         if (error) {
-          console.error("[Callback] exchangeCodeForSession error:", error);
+          console.error("[Callback] exchangeCodeForSession error:", error.message);
           return false;
         }
 
@@ -60,37 +43,75 @@ export default function AuthCallback() {
         console.log("[Callback] no session after exchange");
         return false;
       } catch (e) {
+        console.error("[Callback] exchangeCode exception:", e);
+        return false;
+      }
+    };
+
+    const processUrl = async (url: string | null): Promise<boolean> => {
+      if (!url) {
+        console.log("[Callback] processUrl: url is null");
+        return false;
+      }
+
+      console.log("[Callback] processUrl:", url);
+
+      try {
+        const parsed = LinkingExpo.parse(url);
+        console.log("[Callback] parsed:", JSON.stringify(parsed));
+
+        const code = parsed.queryParams?.code;
+        const codeStr = Array.isArray(code) ? code[0] : code;
+        console.log("[Callback] code from queryParams:", codeStr ? "found" : "not found");
+
+        if (codeStr) {
+          return await exchangeCode(codeStr);
+        }
+
+        // Попробуем найти code= вручную через regex
+        const codeMatch = url.match(/[?&]code=([^&]+)/);
+        if (codeMatch) {
+          const codeFromRegex = decodeURIComponent(codeMatch[1]);
+          console.log("[Callback] code found via regex");
+          return await exchangeCode(codeFromRegex);
+        }
+
+        return false;
+      } catch (e) {
         console.error("[Callback] processUrl error:", e);
         return false;
       }
     };
 
-    // 1. Проверяем initial URL (когда приложение открылось через intent)
-    Linking.getInitialURL().then((url) => {
-      if (isHandled.current) return;
-      processUrl(url).then((ok) => {
+    console.log("[Callback] calling Linking.getInitialURL()...");
+    Linking.getInitialURL()
+      .then((url) => {
+        console.log("[Callback] getInitialURL returned:", url);
+        if (isHandled.current) return;
+        return processUrl(url);
+      })
+      .then((ok) => {
         if (!ok && !isHandled.current) {
-          // Если код не найден — проверяем, может сессия уже есть
+          console.log("[Callback] initial URL processing failed, checking session...");
           supabase.auth.getSession().then(({ data: { session } }) => {
             if (session?.user) {
+              console.log("[Callback] session found via getSession");
               handle("/");
             }
-            // Если нет — ждём onAuthStateChange или fallback
           });
         }
-      });
-    });
+      })
+      .catch((e) => console.error("[Callback] getInitialURL error:", e));
 
-    // 2. Слушаем новые URL (когда приложение уже запущено)
-    const linkingSubscription = Linking.addEventListener("url", ({ url }) => {
+    linkingSubscription = Linking.addEventListener("url", ({ url }) => {
+      console.log("[Callback] Linking event url:", url);
       if (isHandled.current) return;
       processUrl(url);
     });
 
-    // 3. Также слушаем onAuthStateChange (на случай, если Supabase сам установит сессию)
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        console.log("[Callback] event:", event, "hasSession:", !!session);
+        console.log("[Callback] auth event:", event, "hasSession:", !!session);
 
         if (event === "INITIAL_SESSION") return;
 
@@ -106,20 +127,20 @@ export default function AuthCallback() {
     );
     subscription = authListener.subscription;
 
-    // 4. Fallback на 5 секунд — если ничего не сработало
     const fallbackTimer = setTimeout(async () => {
       if (isHandled.current) return;
-      console.log("[Callback] fallback: checking session");
+      console.log("[Callback] fallback after 5s: checking session");
       const {
         data: { session },
       } = await supabase.auth.getSession();
+      console.log("[Callback] fallback session:", session?.user?.email ?? "null");
       handle(session ? "/" : "/login");
     }, 5000);
 
     return () => {
       clearTimeout(fallbackTimer);
       subscription?.unsubscribe();
-      linkingSubscription.remove();
+      linkingSubscription?.remove();
     };
   }, [router]);
 

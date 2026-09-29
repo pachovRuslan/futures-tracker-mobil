@@ -3,11 +3,19 @@ import { useAuth } from "@/hooks/useAuth";
 import { initSubscriptions } from "@/services/subscriptions";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
+import { Linking } from "react-native";
 
 export default function RootLayout() {
   const { user, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+
+  // Логируем initial URL при запуске приложения — важно для диагностики OAuth.
+  useEffect(() => {
+    Linking.getInitialURL().then((url) => {
+      console.log("[RootLayout] initial URL:", url);
+    });
+  }, []);
 
   useEffect(() => {
     initSubscriptions().catch((e) => {
@@ -20,9 +28,6 @@ export default function RootLayout() {
 
     console.log("[RootLayout] segments:", JSON.stringify(segments), "user:", user?.id ?? "null");
 
-    // Не редиректить с callback экрана — там разрулит callback.tsx.
-    // useSegments возвращает tuple с variadic-типом; приводим к string[],
-    // чтобы безопасно индексировать.
     const seg = segments as readonly string[];
 
     console.log("[RootLayout] seg.length:", seg.length, "seg[0]:", seg[0], "seg[1]:", seg[1]);
