@@ -1,0 +1,117 @@
+diff --git a/src/services/auth.ts b/src/services/auth.ts
+index 41fd82b..6fa542b 100755
+--- a/src/services/auth.ts
++++ b/src/services/auth.ts
+@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
+ import { makeRedirectUri } from "expo-auth-session";
+ import * as SecureStore from "expo-secure-store";
+ import * as WebBrowser from "expo-web-browser";
+-import { Platform } from "react-native";
++import { Linking, Platform } from "react-native";
+ import "react-native-url-polyfill/auto";
+ 
+ // ─────────────────────────────────────────────────────────────────────────────
+@@ -105,8 +105,8 @@ export async function signInWithGoogle() {
+   }
+ 
+   // ─── MOBILE (Expo Go + standalone) ──────────────────────────────────────
+-  // Получаем OAuth URL от Supabase, затем открываем его в браузере.
+-  // redirectTo = redirectUrl, чтобы Supabase вернул код обратно в приложение.
++  // Получаем OAuth URL от Supabase с skipBrowserRedirect: true,
++  // затем открываем его в браузере и ждём редиректа на redirectUrl.
+   const { data, error } = await supabase.auth.signInWithOAuth({
+     provider: "google",
+     options: {
+@@ -122,20 +122,28 @@ export async function signInWithGoogle() {
+   if (error) throw error;
+   console.log("[Auth] OAuth URL:", data.url?.slice(0, 80) + "...");
+ 
+-  // Открываем браузер с привязкой к redirectUrl.
+-  // WebBrowser.openAuthSessionAsync возвращает управление в приложение,
+-  // когда браузер редиректит на redirectUrl.
++  // Метод 1: WebBrowser.openAuthSessionAsync — стандартный способ.
++  // На Android в Expo Go открывает Custom Tab, при редиректе на redirectUrl
++  // возвращается в приложение с type: "success".
++  console.log("[Auth] Opening WebBrowser.openAuthSessionAsync...");
+   const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+-  console.log("[Auth] WebBrowser result:", res.type, res.url?.slice(0, 80));
++  console.log("[Auth] WebBrowser result type:", res.type);
++  if ("url" in res) {
++    console.log("[Auth] WebBrowser result url:", res.url?.slice(0, 120));
++  }
+ 
+-  // На success — парсим код и обмениваем
+-  if (res.type === "success" && res.url) {
++  if (res.type === "success" && "url" in res && res.url) {
+     return await finalizeSessionFromUrl(res.url);
+   }
+ 
+-  // В Expo Go иногда возвращается "dismiss" даже при успешном редиректе
+-  // Проверим, не появилась ли уже сессия (Supabase мог сам её установить)
++  // Метод 2: Если openAuthSessionAsync не перехватила редирект (типичный баг
++  // в Expo Go на Android), пробуем открыть обычный браузер и слушать
++  // Linking-события. Это менее элегантно, но надёжнее.
+   if (res.type === "dismiss" || res.type === "cancel") {
++    console.log("[Auth] openAuthSessionAsync failed, trying Linking approach...");
++
++    // Проверим, не появилась ли уже сессия (Supabase мог сам её установить
++    // до того, как пользователь закрыл браузер)
+     const {
+       data: { session },
+     } = await supabase.auth.getSession();
+@@ -143,7 +151,54 @@ export async function signInWithGoogle() {
+       console.log("[Auth] Session found after dismiss");
+       return session.user;
+     }
+-    throw new Error("Auth cancelled");
++
++    // Открываем браузер и слушаем редирект
++    return await new Promise<null>((resolve, reject) => {
++      let resolved = false;
++      const redirectBase = redirectUrl.split("?")[0];
++
++      const subscription = Linking.addEventListener("url", (event) => {
++        console.log("[Auth] Linking event url:", event.url?.slice(0, 120));
++        if (resolved) return;
++        if (event.url && event.url.startsWith(redirectBase)) {
++          resolved = true;
++          subscription.remove();
++          finalizeSessionFromUrl(event.url)
++            .then(() => resolve(null))
++            .catch(reject);
++        }
++      });
++
++      // Открываем браузер
++      WebBrowser.openBrowserAsync(data.url).catch((e: unknown) => {
++        if (!resolved) {
++          resolved = true;
++          subscription.remove();
++          reject(e);
++        }
++      });
++
++      // Timeout 2 минуты
++      const timeoutId = setTimeout(() => {
++        if (!resolved) {
++          resolved = true;
++          subscription.remove();
++          reject(new Error("Auth timeout"));
++        }
++      }, 120000);
++
++      // Очищаем timeout при resolve/reject
++      const originalResolve = resolve;
++      const originalReject = reject;
++      resolve = ((v: null) => {
++        clearTimeout(timeoutId);
++        originalResolve(v);
++      }) as typeof resolve;
++      reject = ((e: unknown) => {
++        clearTimeout(timeoutId);
++        originalReject(e as Error);
++      }) as typeof reject;
++    });
+   }
+ 
+   throw new Error(`Auth failed: ${res.type}`);
