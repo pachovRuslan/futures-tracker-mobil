@@ -2,7 +2,6 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/shared/config";
 import { createClient } from "@supabase/supabase-js";
 import { makeRedirectUri } from "expo-auth-session";
 import * as SecureStore from "expo-secure-store";
-import * as WebBrowser from "expo-web-browser";
 import { Linking, Platform } from "react-native";
 import "react-native-url-polyfill/auto";
 
@@ -88,6 +87,21 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 // ─────────────────────────────────────────────────────────────────────────────
 // Sign in with Google
 // ─────────────────────────────────────────────────────────────────────────────
+//
+// ВАЖНО: Этот код использует ручную реализацию OAuth с PKCE через
+// Linking.openURL + Linking.addEventListener. Раньше использовался
+// WebBrowser.openAuthSessionAsync, но в Expo Go на Android он открывает
+// Custom Tab, который не перехватывает exp:// redirect и зависает.
+//
+// Flow:
+// 1. Генерируем code_verifier и code_challenge (PKCE)
+// 2. Получаем OAuth URL от Supabase с redirect_to = наш redirectUrl
+// 3. Открываем системный браузер через Linking.openURL
+// 4. Слушаем Linking.addEventListener("url", ...) — перехватываем redirect
+// 5. Когда получаем URL с code=, обмениваем код на сессию
+//
+// ВАЖНО: Этот подход требует, чтобы redirectUrl был добавлен в Supabase
+// Dashboard → Authentication → URL Configuration → Redirect URLs.
 
 export async function signInWithGoogle() {
   const redirectUrl = makeRedirectUri({ path: "auth/callback" });
@@ -120,14 +134,9 @@ export async function signInWithGoogle() {
   });
 
   if (error) throw error;
-  // Логируем ПОЛНЫЙ OAuth URL, чтобы видеть, какой redirect_to отправляется.
   console.log("[Auth] OAuth URL (full):", data.url);
 
-  // Открываем браузер через Linking.openURL и слушаем редирект.
-  // ВАЖНО: НЕ используем WebBrowser.openAuthSessionAsync — в Expo Go на Android
-  // он открывает Custom Tab, который не перехватывает exp:// scheme и зависает.
-  // Linking.openURL открывает системный браузер, который корректно обрабатывает
-  // exp:// redirect и возвращает управление в приложение.
+  // Открываем системный браузер и слушаем редирект.
   console.log("[Auth] Opening system browser via Linking.openURL...");
 
   return await new Promise<null>((resolve, reject) => {
@@ -140,11 +149,10 @@ export async function signInWithGoogle() {
       if (resolved) return;
 
       const url = event.url ?? "";
-      // Проверяем, что URL начинается с redirectBase И содержит code=
-      // (это означает, что Supabase вернул OAuth-код).
-      // URL запуска приложения (exp://192.168.1.3:8081 без path и code)
-      // мы игнорируем.
-      if (url.startsWith(redirectBase) && url.includes("code=")) {
+      // Проверяем, что URL содержит code= (Supabase вернул OAuth-код).
+      // Не проверяем startsWith(redirectBase), потому что на Android
+      // redirect может прийти с другим форматом (например, с /--/ в середине).
+      if (url.includes("code=")) {
         resolved = true;
         subscription.remove();
         clearTimeout(timeoutId);
@@ -154,7 +162,7 @@ export async function signInWithGoogle() {
           .catch(reject);
       } else {
         console.log(
-          "[Auth] Ignoring URL (no code= or wrong base):",
+          "[Auth] Ignoring URL (no code=):",
           url.slice(0, 100),
         );
       }
@@ -171,7 +179,7 @@ export async function signInWithGoogle() {
       }
     });
 
-    // Timeout 3 минуты (больше, чем раньше, на случай медленного OAuth)
+    // Timeout 3 минуты
     timeoutId = setTimeout(() => {
       if (!resolved) {
         resolved = true;
@@ -192,6 +200,9 @@ async function finalizeSessionFromUrl(url: string) {
     const parsedUrl = new URL(url);
     const code = parsedUrl.searchParams.get("code");
 
+    console.log("[Auth] finalizeSessionFromUrl url:", url.slice(0, 120));
+    console.log("[Auth] code:", code ? "found" : "not found");
+
     if (!code) {
       // Может уже есть сессия (auto-parsed)
       const {
@@ -208,6 +219,7 @@ async function finalizeSessionFromUrl(url: string) {
     if (session.session?.access_token) {
       await safeStorage.setItem("access_token", session.session.access_token);
       await safeStorage.setItem("refresh_token", session.session.refresh_token);
+      console.log("[Auth] Session saved to storage");
     }
 
     return session.user;
@@ -242,4 +254,3 @@ export async function getSession() {
 }
 
 export { supabase };
-
