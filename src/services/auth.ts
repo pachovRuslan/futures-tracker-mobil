@@ -106,7 +106,7 @@ export async function signInWithGoogle() {
 
   // ─── MOBILE (Expo Go + standalone) ──────────────────────────────────────
   // Получаем OAuth URL от Supabase с skipBrowserRedirect: true,
-  // затем открываем его в браузере и ждём редиректа на redirectUrl.
+  // затем открываем его в системном браузере и ждём редиректа на redirectUrl.
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
@@ -120,94 +120,67 @@ export async function signInWithGoogle() {
   });
 
   if (error) throw error;
-  console.log("[Auth] OAuth URL:", data.url?.slice(0, 80) + "...");
+  // Логируем ПОЛНЫЙ OAuth URL, чтобы видеть, какой redirect_to отправляется.
+  console.log("[Auth] OAuth URL (full):", data.url);
 
-  // Метод 1: WebBrowser.openAuthSessionAsync — стандартный способ.
-  // На Android в Expo Go открывает Custom Tab, при редиректе на redirectUrl
-  // возвращается в приложение с type: "success".
-  console.log("[Auth] Opening WebBrowser.openAuthSessionAsync...");
-  const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-  console.log("[Auth] WebBrowser result type:", res.type);
-  if ("url" in res) {
-    console.log("[Auth] WebBrowser result url:", res.url?.slice(0, 120));
-  }
+  // Открываем браузер через Linking.openURL и слушаем редирект.
+  // ВАЖНО: НЕ используем WebBrowser.openAuthSessionAsync — в Expo Go на Android
+  // он открывает Custom Tab, который не перехватывает exp:// scheme и зависает.
+  // Linking.openURL открывает системный браузер, который корректно обрабатывает
+  // exp:// redirect и возвращает управление в приложение.
+  console.log("[Auth] Opening system browser via Linking.openURL...");
 
-  if (res.type === "success" && "url" in res && res.url) {
-    // Сообщаем WebBrowser, что auth-сессия завершена — это закрывает Custom Tab.
-    WebBrowser.maybeCompleteAuthSession();
-    return await finalizeSessionFromUrl(res.url);
-  }
+  return await new Promise<null>((resolve, reject) => {
+    let resolved = false;
+    const redirectBase = redirectUrl.split("?")[0];
+    let timeoutId: ReturnType<typeof setTimeout>;
 
-  // Метод 2: Если openAuthSessionAsync не перехватила редирект (типичный баг
-  // в Expo Go на Android), пробуем открыть обычный браузер и слушать
-  // Linking-события. Это менее элегантно, но надёжнее.
-  if (res.type === "dismiss" || res.type === "cancel") {
-    console.log("[Auth] openAuthSessionAsync failed, trying Linking approach...");
+    const subscription = Linking.addEventListener("url", (event) => {
+      console.log("[Auth] Linking event url:", event.url);
+      if (resolved) return;
 
-    // Проверим, не появилась ли уже сессия (Supabase мог сам её установить
-    // до того, как пользователь закрыл браузер)
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (session?.user) {
-      console.log("[Auth] Session found after dismiss");
-      WebBrowser.maybeCompleteAuthSession();
-      return session.user;
-    }
-
-    // Открываем браузер и слушаем редирект.
-    // ВАЖНО: проверяем не только startsWith(redirectBase), но и наличие
-    // ?code= в URL. Иначе Linking перехватит URL запуска приложения
-    // (exp://192.168.1.3:8081 без path) и ничего не сделает.
-    return await new Promise<null>((resolve, reject) => {
-      let resolved = false;
-      const redirectBase = redirectUrl.split("?")[0];
-
-      const subscription = Linking.addEventListener("url", (event) => {
-        console.log("[Auth] Linking event url:", event.url?.slice(0, 120));
-        if (resolved) return;
-
-        const url = event.url ?? "";
-        // Проверяем, что URL начинается с redirectBase И содержит code=
-        // (это означает, что Supabase вернул OAuth-код).
-        // URL запуска приложения (exp://192.168.1.3:8081 без path и code)
-        // мы игнорируем.
-        if (url.startsWith(redirectBase) && url.includes("code=")) {
-          resolved = true;
-          subscription.remove();
-          clearTimeout(timeoutId);
-          // Сообщаем WebBrowser, что auth-сессия завершена.
-          WebBrowser.maybeCompleteAuthSession();
-          finalizeSessionFromUrl(url)
-            .then(() => resolve(null))
-            .catch(reject);
-        } else {
-          console.log("[Auth] Ignoring URL (no code= or wrong base):", url.slice(0, 80));
-        }
-      });
-
-      // Открываем браузер
-      WebBrowser.openBrowserAsync(data.url).catch((e: unknown) => {
-        if (!resolved) {
-          resolved = true;
-          subscription.remove();
-          clearTimeout(timeoutId);
-          reject(e);
-        }
-      });
-
-      // Timeout 2 минуты
-      const timeoutId = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          subscription.remove();
-          reject(new Error("Auth timeout"));
-        }
-      }, 120000);
+      const url = event.url ?? "";
+      // Проверяем, что URL начинается с redirectBase И содержит code=
+      // (это означает, что Supabase вернул OAuth-код).
+      // URL запуска приложения (exp://192.168.1.3:8081 без path и code)
+      // мы игнорируем.
+      if (url.startsWith(redirectBase) && url.includes("code=")) {
+        resolved = true;
+        subscription.remove();
+        clearTimeout(timeoutId);
+        console.log("[Auth] Got OAuth code, finalizing session...");
+        finalizeSessionFromUrl(url)
+          .then(() => resolve(null))
+          .catch(reject);
+      } else {
+        console.log(
+          "[Auth] Ignoring URL (no code= or wrong base):",
+          url.slice(0, 100),
+        );
+      }
     });
-  }
 
-  throw new Error(`Auth failed: ${res.type}`);
+    // Открываем системный браузер
+    Linking.openURL(data.url).catch((e: unknown) => {
+      if (!resolved) {
+        resolved = true;
+        subscription.remove();
+        clearTimeout(timeoutId);
+        console.error("[Auth] Linking.openURL failed:", e);
+        reject(e);
+      }
+    });
+
+    // Timeout 3 минуты (больше, чем раньше, на случай медленного OAuth)
+    timeoutId = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        subscription.remove();
+        console.error("[Auth] Timeout waiting for OAuth redirect");
+        reject(new Error("Auth timeout — no redirect received in 3 minutes"));
+      }
+    }, 180000);
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
