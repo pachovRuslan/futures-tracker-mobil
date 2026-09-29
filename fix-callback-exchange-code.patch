@@ -1,0 +1,104 @@
+diff --git a/app/auth/callback.tsx b/app/auth/callback.tsx
+index 4529680..d6e843e 100644
+--- a/app/auth/callback.tsx
++++ b/app/auth/callback.tsx
+@@ -2,7 +2,7 @@ import { supabase } from "@/services/auth";
+ import { colors } from "@/theme/colors";
+ import { useRouter } from "expo-router";
+ import { useEffect, useRef } from "react";
+-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
++import { ActivityIndicator, Linking, StyleSheet, Text, View } from "react-native";
+ 
+ export default function AuthCallback() {
+   const router = useRouter();
+@@ -21,6 +21,73 @@ export default function AuthCallback() {
+       setTimeout(() => router.replace(next), 150);
+     };
+ 
++    // Функция для извлечения code из URL и обмена на сессию.
++    // ВАЖНО: в standalone APK приложение открывается через intent
++    // futurestracker://auth/callback?code=... — Linking.getInitialURL()
++    // возвращает этот URL. Supabase с detectSessionInUrl:false не обменивает
++    // код автоматически, поэтому делаем это вручную.
++    const processUrl = async (url: string | null) => {
++      if (!url) {
++        console.log("[Callback] no URL to process");
++        return false;
++      }
++
++      console.log("[Callback] processing URL:", url.slice(0, 120));
++
++      try {
++        const parsedUrl = new URL(url);
++        const code = parsedUrl.searchParams.get("code");
++
++        if (!code) {
++          console.log("[Callback] no code in URL");
++          return false;
++        }
++
++        console.log("[Callback] found code, exchanging for session...");
++        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
++
++        if (error) {
++          console.error("[Callback] exchangeCodeForSession error:", error);
++          return false;
++        }
++
++        if (data.session?.user) {
++          console.log("[Callback] session established, user:", data.session.user.email);
++          handle("/");
++          return true;
++        }
++
++        console.log("[Callback] no session after exchange");
++        return false;
++      } catch (e) {
++        console.error("[Callback] processUrl error:", e);
++        return false;
++      }
++    };
++
++    // 1. Проверяем initial URL (когда приложение открылось через intent)
++    Linking.getInitialURL().then((url) => {
++      if (isHandled.current) return;
++      processUrl(url).then((ok) => {
++        if (!ok && !isHandled.current) {
++          // Если код не найден — проверяем, может сессия уже есть
++          supabase.auth.getSession().then(({ data: { session } }) => {
++            if (session?.user) {
++              handle("/");
++            }
++            // Если нет — ждём onAuthStateChange или fallback
++          });
++        }
++      });
++    });
++
++    // 2. Слушаем новые URL (когда приложение уже запущено)
++    const linkingSubscription = Linking.addEventListener("url", ({ url }) => {
++      if (isHandled.current) return;
++      processUrl(url);
++    });
++
++    // 3. Также слушаем onAuthStateChange (на случай, если Supabase сам установит сессию)
+     const { data: authListener } = supabase.auth.onAuthStateChange(
+       (event, session) => {
+         console.log("[Callback] event:", event, "hasSession:", !!session);
+@@ -39,7 +106,7 @@ export default function AuthCallback() {
+     );
+     subscription = authListener.subscription;
+ 
+-    // Fallback на 5 секунд
++    // 4. Fallback на 5 секунд — если ничего не сработало
+     const fallbackTimer = setTimeout(async () => {
+       if (isHandled.current) return;
+       console.log("[Callback] fallback: checking session");
+@@ -52,6 +119,7 @@ export default function AuthCallback() {
+     return () => {
+       clearTimeout(fallbackTimer);
+       subscription?.unsubscribe();
++      linkingSubscription.remove();
+     };
+   }, [router]);
+ 
