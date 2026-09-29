@@ -3,7 +3,10 @@ import { createClient } from "@supabase/supabase-js";
 import { makeRedirectUri } from "expo-auth-session";
 import * as SecureStore from "expo-secure-store";
 import { Linking, Platform } from "react-native";
-import "react-native-url-polyfill/auto";
+
+// ВАЖНО: НЕ импортируем "react-native-url-polyfill/auto" — в RN 0.86 + Hermes
+// это вызывает JSI crash (assertion "isObject()" failed в jsi.h:2014).
+// В RN 0.86 глобальный URL уже встроен, polyfill не нужен.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Safe storage (web → localStorage, native → SecureStore)
