@@ -5,16 +5,18 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-// В React Native 0.86 Picker удалён из ядра.
-// Используем @react-native-picker/picker — установите его:
-//   npx expo install @react-native-picker/picker
-import { Picker } from "@react-native-picker/picker";
+
+// ВАЖНО: НЕ используем @react-native-picker/picker — это нативный модуль,
+// который не работает в Expo Go и вызывает краш при загрузке бандла.
+// Вместо этого — горизонтальный скролл с кнопками бирж.
+// Это работает на всех платформах (Expo Go, dev build, web, standalone).
 
 export default function ConnectionsScreen() {
   const [connections, setConnections] = useState<any[]>([]);
@@ -87,7 +89,7 @@ export default function ConnectionsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Подключения</Text>
       {error && (
         <View style={styles.errorBox}>
@@ -120,41 +122,65 @@ export default function ConnectionsScreen() {
 
       <Text style={[styles.title, { marginTop: 24 }]}>Добавить</Text>
       <View style={styles.form}>
-        <View style={styles.pickerWrap}>
-          <Picker
-            selectedValue={exchange}
-            onValueChange={(v) => setExchange(v as (typeof EXCHANGES)[number])}
-            style={styles.picker}
-            dropdownIconColor={colors.text}
-            itemStyle={{ color: colors.text }}
+        {/* Селектор биржи — горизонтальный скролл с кнопками.
+            Заменяет @react-native-picker/picker, который не работает в Expo Go. */}
+        <View>
+          <Text style={styles.fieldLabel}>Биржа</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.exchangeSelector}
           >
-            {EXCHANGES.map((ex) => (
-              <Picker.Item
-                key={ex}
-                label={EXCHANGE_LABELS[ex]}
-                value={ex}
-                color={colors.text}
-              />
-            ))}
-          </Picker>
+            {EXCHANGES.map((ex) => {
+              const selected = ex === exchange;
+              return (
+                <TouchableOpacity
+                  key={ex}
+                  style={[
+                    styles.exchangeChip,
+                    selected && styles.exchangeChipActive,
+                  ]}
+                  onPress={() => setExchange(ex)}
+                >
+                  <Text
+                    style={[
+                      styles.exchangeChipText,
+                      selected && styles.exchangeChipTextActive,
+                    ]}
+                  >
+                    {EXCHANGE_LABELS[ex]}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
-        <TextInput
-          style={styles.input}
-          placeholder="API Key"
-          placeholderTextColor={colors.textFaint}
-          value={apiKey}
-          onChangeText={setApiKey}
-          autoCapitalize="none"
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="API Secret"
-          placeholderTextColor={colors.textFaint}
-          value={apiSecret}
-          onChangeText={setApiSecret}
-          secureTextEntry
-          autoCapitalize="none"
-        />
+
+        <View>
+          <Text style={styles.fieldLabel}>API Key</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Введите API Key"
+            placeholderTextColor={colors.textFaint}
+            value={apiKey}
+            onChangeText={setApiKey}
+            autoCapitalize="none"
+          />
+        </View>
+
+        <View>
+          <Text style={styles.fieldLabel}>API Secret</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Введите API Secret"
+            placeholderTextColor={colors.textFaint}
+            value={apiSecret}
+            onChangeText={setApiSecret}
+            secureTextEntry
+            autoCapitalize="none"
+          />
+        </View>
+
         <TouchableOpacity
           style={[styles.button, (saving || !apiKey || !apiSecret) && styles.buttonDisabled]}
           onPress={submit}
@@ -165,12 +191,13 @@ export default function ConnectionsScreen() {
           </Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg, padding: 16 },
+  container: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: 16, paddingBottom: 32 },
   center: {
     flex: 1,
     justifyContent: "center",
@@ -199,15 +226,39 @@ const styles = StyleSheet.create({
   connected: { fontSize: 11, color: colors.profit, marginTop: 4 },
   notConnected: { fontSize: 11, color: colors.textFaint, marginTop: 4 },
   disconnect: { fontSize: 12, color: colors.loss },
-  form: { gap: 12 },
-  pickerWrap: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    overflow: "hidden",
+  form: { gap: 14 },
+  fieldLabel: {
+    fontSize: 11,
+    color: colors.textFaint,
+    marginBottom: 6,
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
-  picker: {
+  exchangeSelector: {
+    flexDirection: "row",
+    gap: 8,
+    paddingVertical: 4,
+  },
+  exchangeChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  exchangeChipActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  exchangeChipText: {
+    fontSize: 13,
     color: colors.text,
-    height: 50,
+    fontWeight: "500",
+  },
+  exchangeChipTextActive: {
+    color: "#fff",
+    fontWeight: "600",
   },
   input: {
     backgroundColor: colors.surface,
@@ -215,12 +266,15 @@ const styles = StyleSheet.create({
     padding: 14,
     color: colors.text,
     fontSize: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   button: {
     backgroundColor: colors.accent,
     borderRadius: 8,
     padding: 14,
     alignItems: "center",
+    marginTop: 4,
   },
   buttonDisabled: { opacity: 0.5 },
   buttonText: { color: "#fff", fontSize: 14, fontWeight: "500" },
