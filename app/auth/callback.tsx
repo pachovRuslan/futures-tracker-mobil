@@ -1,41 +1,52 @@
 import { supabase } from "@/services/auth";
 import { colors } from "@/theme/colors";
-import * as LinkingExpo from "expo-linking";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef } from "react";
-import { ActivityIndicator, Linking, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 export default function AuthCallback() {
   const router = useRouter();
   const isHandled = useRef(false);
+  // useLocalSearchParams() даёт query-параметры из URL.
+  // Expo Router парсит futurestracker://auth/callback?code=... и делает
+  // code доступным через params.code.
+  const params = useLocalSearchParams();
 
   useEffect(() => {
-    console.log("[Callback] screen mounted, isHandled:", isHandled.current);
+    console.log("[Callback] screen mounted, params:", JSON.stringify(params));
 
     let subscription: { unsubscribe: () => void } | null = null;
-    let linkingSubscription: { remove: () => void } | null = null;
 
     const handle = (next: "/" | "/login") => {
       if (isHandled.current) return;
       isHandled.current = true;
       console.log("[Callback] handle ->", next);
       subscription?.unsubscribe();
-      linkingSubscription?.remove();
       setTimeout(() => router.replace(next), 150);
     };
 
     const exchangeCode = async (code: string): Promise<boolean> => {
-      console.log("[Callback] exchanging code for session...");
+      console.log(
+        "[Callback] exchanging code for session, code length:",
+        code.length,
+      );
       try {
-        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+        const { data, error } =
+          await supabase.auth.exchangeCodeForSession(code);
 
         if (error) {
-          console.error("[Callback] exchangeCodeForSession error:", error.message);
+          console.error(
+            "[Callback] exchangeCodeForSession error:",
+            error.message,
+          );
           return false;
         }
 
         if (data.session?.user) {
-          console.log("[Callback] session established, user:", data.session.user.email);
+          console.log(
+            "[Callback] session established, user:",
+            data.session.user.email,
+          );
           handle("/");
           return true;
         }
@@ -48,77 +59,29 @@ export default function AuthCallback() {
       }
     };
 
-    const processUrl = async (url: string | null): Promise<boolean> => {
-      if (!url) {
-        console.log("[Callback] processUrl: url is null");
-        return false;
-      }
+    // 1. Пытаемся получить code из useLocalSearchParams (основной способ).
+    // Expo Router парсит URL futurestracker://auth/callback?code=XXX
+    // и делает параметры доступными через useLocalSearchParams().
+    const codeFromParams = params.code;
+    const codeStr = Array.isArray(codeFromParams)
+      ? codeFromParams[0]
+      : codeFromParams;
 
-      console.log("[Callback] processUrl:", url);
+    if (codeStr && typeof codeStr === "string") {
+      console.log("[Callback] code found in params");
+      exchangeCode(codeStr);
+    } else {
+      console.log("[Callback] no code in params, waiting for auth event...");
+    }
 
-      try {
-        const parsed = LinkingExpo.parse(url);
-        console.log("[Callback] parsed:", JSON.stringify(parsed));
-
-        const code = parsed.queryParams?.code;
-        const codeStr = Array.isArray(code) ? code[0] : code;
-        console.log("[Callback] code from queryParams:", codeStr ? "found" : "not found");
-
-        if (codeStr) {
-          return await exchangeCode(codeStr);
-        }
-
-        // Попробуем найти code= вручную через regex
-        const codeMatch = url.match(/[?&]code=([^&]+)/);
-        if (codeMatch) {
-          const codeFromRegex = decodeURIComponent(codeMatch[1]);
-          console.log("[Callback] code found via regex");
-          return await exchangeCode(codeFromRegex);
-        }
-
-        return false;
-      } catch (e) {
-        console.error("[Callback] processUrl error:", e);
-        return false;
-      }
-    };
-
-    console.log("[Callback] calling Linking.getInitialURL()...");
-    Linking.getInitialURL()
-      .then((url) => {
-        console.log("[Callback] getInitialURL returned:", url);
-        if (isHandled.current) return;
-        return processUrl(url);
-      })
-      .then((ok) => {
-        if (!ok && !isHandled.current) {
-          console.log("[Callback] initial URL processing failed, checking session...");
-          supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session?.user) {
-              console.log("[Callback] session found via getSession");
-              handle("/");
-            }
-          });
-        }
-      })
-      .catch((e) => console.error("[Callback] getInitialURL error:", e));
-
-    linkingSubscription = Linking.addEventListener("url", ({ url }) => {
-      console.log("[Callback] Linking event url:", url);
-      if (isHandled.current) return;
-      processUrl(url);
-    });
-
+    // 2. Слушаем onAuthStateChange (на случай, если Supabase сам установит сессию)
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (event, session) => {
         console.log("[Callback] auth event:", event, "hasSession:", !!session);
 
         if (event === "INITIAL_SESSION") return;
 
-        if (
-          (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") &&
-          session
-        ) {
+        if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
           handle("/");
         } else if (event === "SIGNED_OUT") {
           handle("/login");
@@ -127,22 +90,25 @@ export default function AuthCallback() {
     );
     subscription = authListener.subscription;
 
+    // 3. Fallback на 5 секунд
     const fallbackTimer = setTimeout(async () => {
       if (isHandled.current) return;
       console.log("[Callback] fallback after 5s: checking session");
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      console.log("[Callback] fallback session:", session?.user?.email ?? "null");
+      console.log(
+        "[Callback] fallback session:",
+        session?.user?.email ?? "null",
+      );
       handle(session ? "/" : "/login");
     }, 5000);
 
     return () => {
       clearTimeout(fallbackTimer);
       subscription?.unsubscribe();
-      linkingSubscription?.remove();
     };
-  }, [router]);
+  }, [router, params]);
 
   return (
     <View style={styles.container}>
