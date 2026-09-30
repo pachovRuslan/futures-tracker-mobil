@@ -77,9 +77,9 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: Platform.OS === "web",
+    flowType: "pkce",
   },
 });
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Sign in with Google — гибридный OAuth flow
 // ─────────────────────────────────────────────────────────────────────────────
