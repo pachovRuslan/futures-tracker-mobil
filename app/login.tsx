@@ -1,31 +1,59 @@
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/context/AuthContext";
 import { colors } from "@/theme/colors";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useRouter } from "expo-router";
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 export default function LoginScreen() {
   const { login } = useAuth();
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
+    if (loading) return;
+    setLoading(true);
     try {
       await login();
+      // Сессия установится через onAuthStateChange → AuthProvider обновит user
+      // → RootNavigator сделает redirect на "/".
     } catch (e) {
-      console.error("Login error:", e);
+      const msg = e instanceof Error ? e.message : "Не удалось войти";
+      Alert.alert("Ошибка входа", msg);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.card}>
         <Text style={styles.title}>FUTURES TRACKER</Text>
         <Text style={styles.subtitle}>Личный трекер фьючерсных сделок</Text>
-        <TouchableOpacity style={styles.button} onPress={handleLogin}>
-          <Text style={styles.buttonText}>Войти через Google</Text>
+        <TouchableOpacity
+          style={[styles.button, loading && styles.buttonDisabled]}
+          onPress={handleLogin}
+          disabled={loading}
+          activeOpacity={0.8}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Войти через Google</Text>
+          )}
         </TouchableOpacity>
         <Text style={styles.hint}>
           Вход только для пользователей из allowlist
         </Text>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -59,7 +87,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     marginTop: 8,
+    minWidth: 180,
+    alignItems: "center",
   },
+  buttonDisabled: { opacity: 0.6 },
   buttonText: { color: "#fff", fontSize: 14, fontWeight: "500" },
   hint: {
     fontSize: 10,

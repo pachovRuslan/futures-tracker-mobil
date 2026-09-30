@@ -1,3 +1,9 @@
+/**
+ * Цветовая палитра приложения (тёмная тема).
+ *
+ * Все цвета захардкожены — в будущем можно вынести в theme-провайдер
+ * для поддержки light/dark переключения.
+ */
 export const colors = {
   bg: "#0a0d12",
   surface: "#12161d",
@@ -11,5 +17,8 @@ export const colors = {
   loss: "#f0576b",
   lossDim: "#3a1f26",
   accent: "#4c7eff",
-  accentHover: "#6b95ff",
-};
+  /** Цвет кнопки Google OAuth. */
+  googleBlue: "#4285F4",
+} as const;
+
+export type ColorName = keyof typeof colors;

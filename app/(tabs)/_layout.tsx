@@ -15,7 +15,10 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: colors.textFaint,
       }}
     >
-      <Tabs.Screen name="index" options={{ title: "Дашборд" }} />
+      <Tabs.Screen
+        name="index"
+        options={{ title: "Дашборд", headerShown: false }}
+      />
       <Tabs.Screen name="trades" options={{ title: "Сделки" }} />
       <Tabs.Screen name="balance" options={{ title: "Баланс" }} />
       <Tabs.Screen name="settings" options={{ title: "Настройки" }} />

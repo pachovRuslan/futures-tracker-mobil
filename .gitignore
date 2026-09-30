@@ -6,14 +6,17 @@ web-build/
 # Node
 node_modules/
 .env
+.env.local
+.env.*.local
 
-# Native
+# Native / signing
 *.orig.*
 *.jks
 *.p8
 *.p12
 *.key
 *.mobileprovision
+google-service-account.json
 
 # Metro
 .metro-health-check*
@@ -29,3 +32,13 @@ yarn-error.*
 # IDE
 .vscode/
 .idea/
+
+# Patch artifacts (временные файлы при разработке)
+*.patch
+*.rej
+
+# TypeScript build info
+*.tsbuildinfo
+
+# EAS local overrides
+eas.json.local

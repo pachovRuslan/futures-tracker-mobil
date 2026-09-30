@@ -1,114 +1,87 @@
-import { supabase } from "@/services/auth";
+import { exchangeCodeForSession, supabase } from "@/services/auth";
 import { colors } from "@/theme/colors";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
+/**
+ * OAuth callback screen.
+ *
+ * Expo Router парсит URL futurestracker://auth/callback?code=XXX и делает
+ * параметры доступными через useLocalSearchParams(). Здесь мы обмениваем
+ * код на сессию через supabase.auth.exchangeCodeForSession().
+ *
+ * ВАЖНО: обмен кода происходит ТОЛЬКО здесь, а не в signInWithGoogle()
+ * (которая только открывает браузер). Это устраняет race condition, когда
+ * два обработчика параллельно пытались обменять один и тот же код (PKCE
+ * код одноразовый — второй вызов падал с invalid_grant).
+ */
 export default function AuthCallback() {
   const router = useRouter();
   const isHandled = useRef(false);
-  // useLocalSearchParams() даёт query-параметры из URL.
-  // Expo Router парсит futurestracker://auth/callback?code=... и делает
-  // code доступным через params.code.
-  const params = useLocalSearchParams();
+  const params = useLocalSearchParams<{ code?: string; error?: string }>();
 
   useEffect(() => {
-    console.log("[Callback] screen mounted, params:", JSON.stringify(params));
+    let unsub: { unsubscribe: () => void } | null = null;
 
-    let subscription: { unsubscribe: () => void } | null = null;
-
-    const handle = (next: "/" | "/login") => {
+    const redirect = (path: "/" | "/login") => {
       if (isHandled.current) return;
       isHandled.current = true;
-      console.log("[Callback] handle ->", next);
-      subscription?.unsubscribe();
-      setTimeout(() => router.replace(next), 150);
+      unsub?.unsubscribe();
+      // Небольшая задержка, чтобы успел смонтироваться AuthProvider.
+      setTimeout(() => router.replace(path), 100);
     };
 
-    const exchangeCode = async (code: string): Promise<boolean> => {
-      console.log(
-        "[Callback] exchanging code for session, code length:",
-        code.length,
-      );
-      try {
-        const { data, error } =
-          await supabase.auth.exchangeCodeForSession(code);
+    // 1. Обработка error в query (Google отменил авторизацию).
+    if (params.error) {
+      if (__DEV__) console.warn("[Callback] OAuth error:", params.error);
+      redirect("/login");
+      return;
+    }
 
-        if (error) {
-          console.error(
-            "[Callback] exchangeCodeForSession error:",
-            error.message,
-          );
-          return false;
-        }
-
-        if (data.session?.user) {
-          console.log(
-            "[Callback] session established, user:",
-            data.session.user.email,
-          );
-          handle("/");
-          return true;
-        }
-
-        console.log("[Callback] no session after exchange");
-        return false;
-      } catch (e) {
-        console.error("[Callback] exchangeCode exception:", e);
-        return false;
-      }
-    };
-
-    // 1. Пытаемся получить code из useLocalSearchParams (основной способ).
-    // Expo Router парсит URL futurestracker://auth/callback?code=XXX
-    // и делает параметры доступными через useLocalSearchParams().
-    const codeFromParams = params.code;
-    const codeStr = Array.isArray(codeFromParams)
-      ? codeFromParams[0]
-      : codeFromParams;
-
-    if (codeStr && typeof codeStr === "string") {
-      console.log("[Callback] code found in params");
-      exchangeCode(codeStr);
-    } else {
+    // 2. Обработка code — основной путь.
+    if (params.code) {
+      exchangeCodeForSession(params.code)
+        .then((user) => {
+          if (user) {
+            if (__DEV__) console.log("[Callback] session established:", user.email);
+            redirect("/");
+          } else {
+            if (__DEV__) console.warn("[Callback] no user after exchange");
+            redirect("/login");
+          }
+        })
+        .catch((e) => {
+          if (__DEV__) console.error("[Callback] exchangeCode error:", e);
+          redirect("/login");
+        });
+    } else if (__DEV__) {
       console.log("[Callback] no code in params, waiting for auth event...");
     }
 
-    // 2. Слушаем onAuthStateChange (на случай, если Supabase сам установит сессию)
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        console.log("[Callback] auth event:", event, "hasSession:", !!session);
+    // 3. Fallback через onAuthStateChange (если Supabase сам установит сессию).
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "INITIAL_SESSION") return;
+      if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
+        redirect("/");
+      } else if (event === "SIGNED_OUT") {
+        redirect("/login");
+      }
+    });
+    unsub = data.subscription;
 
-        if (event === "INITIAL_SESSION") return;
-
-        if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
-          handle("/");
-        } else if (event === "SIGNED_OUT") {
-          handle("/login");
-        }
-      },
-    );
-    subscription = authListener.subscription;
-
-    // 3. Fallback на 5 секунд
-    const fallbackTimer = setTimeout(async () => {
+    // 4. Timeout fallback на 5 секунд.
+    const timer = setTimeout(async () => {
       if (isHandled.current) return;
-      console.log("[Callback] fallback after 5s: checking session");
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      console.log(
-        "[Callback] fallback session:",
-        session?.user?.email ?? "null",
-      );
-      handle(session ? "/" : "/login");
+      const { data: sd } = await supabase.auth.getSession();
+      redirect(sd.session ? "/" : "/login");
     }, 5000);
 
     return () => {
-      clearTimeout(fallbackTimer);
-      subscription?.unsubscribe();
+      clearTimeout(timer);
+      unsub?.unsubscribe();
     };
-  }, [router, params]);
+  }, [router, params.code, params.error]);
 
   return (
     <View style={styles.container}>

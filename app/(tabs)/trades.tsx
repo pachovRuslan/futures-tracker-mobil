@@ -2,6 +2,7 @@ import { useTrades } from "@/hooks/useTrades";
 import { fmtDate, fmtPnl, tradeNetPnl } from "@/shared/trade-model";
 import { EXCHANGE_LABELS, type Trade } from "@/shared/types";
 import { colors } from "@/theme/colors";
+import { useCallback, useMemo } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -14,40 +15,49 @@ import {
 export default function TradesScreen() {
   const { trades, loading, error, reload } = useTrades();
 
-  const renderItem = ({ item: t }: { item: Trade }) => {
-    const net = tradeNetPnl(t);
-    return (
-      <View style={styles.row}>
-        <View style={styles.left}>
-          <View
+  const renderItem = useCallback(
+    ({ item: t }: { item: Trade }) => {
+      const net = tradeNetPnl(t);
+      return (
+        <View style={styles.row}>
+          <View style={styles.left}>
+            <View
+              style={[
+                styles.badge,
+                t.side === "long" ? styles.longBadge : styles.shortBadge,
+              ]}
+            >
+              <Text style={styles.badgeText}>
+                {t.side === "long" ? "LONG" : "SHORT"}
+              </Text>
+            </View>
+            <View>
+              <Text style={styles.symbol}>{t.symbol}</Text>
+              <Text style={styles.exchange}>
+                {EXCHANGE_LABELS[t.exchange] ?? t.exchange} ·{" "}
+                {fmtDate(t.closed_at)}
+              </Text>
+            </View>
+          </View>
+          <Text
             style={[
-              styles.badge,
-              t.side === "long" ? styles.longBadge : styles.shortBadge,
+              styles.pnl,
+              { color: net >= 0 ? colors.profit : colors.loss },
             ]}
           >
-            <Text style={styles.badgeText}>
-              {t.side === "long" ? "LONG" : "SHORT"}
-            </Text>
-          </View>
-          <View>
-            <Text style={styles.symbol}>{t.symbol}</Text>
-            <Text style={styles.exchange}>
-              {EXCHANGE_LABELS[t.exchange] ?? t.exchange} ·{" "}
-              {fmtDate(t.closed_at)}
-            </Text>
-          </View>
+            {fmtPnl(net)}
+          </Text>
         </View>
-        <Text
-          style={[
-            styles.pnl,
-            { color: net >= 0 ? colors.profit : colors.loss },
-          ]}
-        >
-          {fmtPnl(net)}
-        </Text>
-      </View>
-    );
-  };
+      );
+    },
+    [],
+  );
+
+  const keyExtractor = useCallback((item: Trade) => item.id, []);
+  const ListEmptyComponent = useMemo(
+    () => <Text style={styles.empty}>Сделок пока нет</Text>,
+    [],
+  );
 
   if (loading && trades.length === 0) {
     return (
@@ -74,14 +84,12 @@ export default function TradesScreen() {
     <View style={styles.container}>
       <FlatList
         data={trades}
-        keyExtractor={(item) => item.id}
+        keyExtractor={keyExtractor}
         renderItem={renderItem}
         onRefresh={reload}
         refreshing={loading}
         contentContainerStyle={{ padding: 16, gap: 4 }}
-        ListEmptyComponent={
-          <Text style={styles.empty}>Сделок пока нет</Text>
-        }
+        ListEmptyComponent={ListEmptyComponent}
       />
     </View>
   );

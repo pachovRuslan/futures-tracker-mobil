@@ -1,3 +1,18 @@
+/**
+ * Доменные типы приложения Futures Tracker.
+ *
+ * Соответствуют схеме таблиц в Supabase:
+ *   - public.trades
+ *   - public.balance_snapshots
+ *   - public.user_entitlements
+ *   - public.connections (через REST API)
+ */
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Exchanges
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Все поддерживаемые биржи + "manual" для сделок, заведённых вручную. */
 export type Exchange =
   | "bybit"
   | "bitunix"
@@ -7,57 +22,7 @@ export type Exchange =
   | "mexc"
   | "manual";
 
-export interface Trade {
-  id: string;
-  user_id: string;
-  exchange: Exchange;
-  external_id: string;
-  symbol: string;
-  side: "long" | "short";
-  qty: number | null;
-  entry_price: number | null;
-  close_price: number | null;
-  realized_pnl: number;
-  fee: number;
-  funding: number;
-  opened_at: string | null;
-  closed_at: string;
-  notes: string | null;
-  raw: unknown;
-}
-
-export interface MonthlySummary {
-  month: string;
-  totalPnl: number;
-  totalFee: number;
-  totalFunding: number;
-  netPnl: number;
-  tradeCount: number;
-  // Строка вида "87.5" (рассчитано через toFixed(1)) —
-  // соответствует возвращаемому значению calculateMonthStats в trade-model.ts.
-  winRate: string;
-}
-
-export interface BalanceSnapshot {
-  id: string;
-  type: "spot" | "futures";
-  value_usd: number;
-  snapshot_date: string;
-  note: string | null;
-  created_at: string;
-}
-
-export interface UserSettings {
-  goal_usd: number | null;
-  futures_start_usd: number;
-}
-
-export interface Connection {
-  exchange: string;
-  key_preview: string;
-  created_at: string;
-}
-
+/** Биржи, которые можно подключить через API-ключи (без manual). */
 export const EXCHANGES = [
   "bybit",
   "bitunix",
@@ -65,9 +30,12 @@ export const EXCHANGES = [
   "bitget",
   "bingx",
   "mexc",
-] as const;
+] as const satisfies readonly Exchange[];
 
-export const EXCHANGE_LABELS: Record<string, string> = {
+export type ApiExchange = (typeof EXCHANGES)[number];
+
+/** Человекочитаемые названия бирж. */
+export const EXCHANGE_LABELS: Record<Exchange, string> = {
   bybit: "Bybit",
   bitunix: "Bitunix",
   binance: "Binance",
@@ -76,3 +44,97 @@ export const EXCHANGE_LABELS: Record<string, string> = {
   mexc: "MEXC",
   manual: "Manual",
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Trade
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TradeSide = "long" | "short";
+
+export interface Trade {
+  id: string;
+  user_id: string;
+  exchange: Exchange;
+  external_id: string;
+  symbol: string;
+  side: TradeSide;
+  qty: number | null;
+  entry_price: number | null;
+  close_price: number | null;
+  realized_pnl: number;
+  fee: number;
+  funding: number;
+  opened_at: string | null;
+  /** closed_at может быть null для открытых позиций, несмотря на схему NOT NULL. */
+  closed_at: string | null;
+  notes: string | null;
+  raw: unknown;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Aggregates
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface MonthlySummary {
+  month: string; // "YYYY-MM"
+  totalPnl: number;
+  totalFee: number;
+  totalFunding: number;
+  netPnl: number;
+  tradeCount: number;
+  winRate: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Balance snapshots
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type BalanceType = "spot" | "futures";
+
+export interface BalanceSnapshot {
+  id: string;
+  type: BalanceType;
+  value_usd: number;
+  snapshot_date: string; // "YYYY-MM-DD"
+  note: string | null;
+  created_at: string; // ISO timestamp
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User settings
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UserSettings {
+  goal_usd: number | null;
+  futures_start_usd: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Exchange connections (через REST API)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Connection {
+  exchange: ApiExchange;
+  key_preview: string;
+  created_at: string; // ISO timestamp
+}
+
+export interface CreateConnectionPayload {
+  exchange: ApiExchange;
+  apiKey: string;
+  apiSecret: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Premium / entitlement
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type EntitlementSource = "allowlist" | "manual" | "none";
+
+export interface Entitlement {
+  isPremium: boolean;
+  isAllowlisted: boolean;
+  expiresAt: Date | null;
+  note: string | null;
+  source: EntitlementSource;
+}

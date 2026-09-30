@@ -31,13 +31,10 @@
     },
     "production": {
       "android": {
-        "buildType": "apk"
+        "buildType": "app-bundle"
       },
       "ios": {
         "simulator": false
-      },
-      "env": {
-        "EXPO_NO_SUPPLY_CHAIN_POLICY": "1"
       }
     }
   },
@@ -46,11 +43,6 @@
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",
         "track": "internal"
-      },
-      "ios": {
-        "appleId": "your-apple-id@example.com",
-        "ascAppId": "your-app-store-connect-app-id",
-        "appleTeamId": "your-apple-team-id"
       }
     }
   }

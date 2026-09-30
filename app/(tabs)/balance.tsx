@@ -1,6 +1,7 @@
 import { api } from "@/services/api";
+import type { BalanceSnapshot } from "@/shared/types";
 import { colors } from "@/theme/colors";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -10,35 +11,35 @@ import {
   View,
 } from "react-native";
 
-interface Snapshot {
-  id: string;
-  type: "spot" | "futures";
-  value_usd: number;
-  snapshot_date: string;
-  note: string | null;
-  created_at: string;
-}
-
 export default function BalanceScreen() {
-  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [snapshots, setSnapshots] = useState<BalanceSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await api.getBalance();
-      setSnapshots((data.snapshots ?? []) as Snapshot[]);
+      if (mountedRef.current) {
+        setSnapshots(data.snapshots ?? []);
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (mountedRef.current) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     load();
+    return () => {
+      mountedRef.current = false;
+    };
   }, [load]);
 
   if (loading && snapshots.length === 0) {
@@ -65,7 +66,7 @@ export default function BalanceScreen() {
   const spot = snapshots.filter((s) => s.type === "spot");
   const futures = snapshots.filter((s) => s.type === "futures");
 
-  const renderItem = (s: Snapshot) => (
+  const renderItem = (s: BalanceSnapshot) => (
     <View key={s.id} style={styles.row}>
       <View>
         <Text style={styles.value}>${Number(s.value_usd).toFixed(2)}</Text>

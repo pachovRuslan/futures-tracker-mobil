@@ -1,15 +1,15 @@
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/context/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { supabase } from "@/services/auth";
+import { FREE_TRADE_LIMIT } from "@/shared/config";
 import type { Trade } from "@/shared/types";
 import { tradeNetPnl } from "@/shared/trade-model";
 import { EXCHANGE_LABELS } from "@/shared/types";
 import { colors } from "@/theme/colors";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -20,7 +20,7 @@ import {
 
 interface DashboardStats {
   totalPnl: number;
-  totalPnlPercent: number;
+  avgPnlPerTrade: number;
   winRate: number;
   totalTrades: number;
   activeTrades: number;
@@ -29,16 +29,25 @@ interface DashboardStats {
 
 type LoadState = "idle" | "loading" | "refreshing" | "error" | "empty";
 
-const FREE_TRADE_LIMIT = 50;
-const SUCCESS_COLOR = "#22c55e";
-const DANGER_COLOR = "#ef4444";
+const TRADES_SELECT = [
+  "id",
+  "user_id",
+  "exchange",
+  "external_id",
+  "symbol",
+  "side",
+  "qty",
+  "entry_price",
+  "close_price",
+  "realized_pnl",
+  "fee",
+  "funding",
+  "opened_at",
+  "closed_at",
+  "notes",
+  "raw",
+].join(", ");
 
-// Дашборд читает сделки напрямую из Supabase — это избегает CORS-проблем
-// с внешним API (https://futures-tracker-lake.vercel.app/api/trades) при
-// запуске на localhost. Запрашиваем РЕАЛЬНЫЕ колонки таблицы trades:
-// realized_pnl, fee, funding, entry_price, close_price, qty, opened_at,
-// closed_at, symbol, side, exchange, id. НЕ запрашиваем pnl/pnl_percent,
-// которых в БД нет.
 export default function DashboardScreen() {
   const router = useRouter();
   const { user } = useAuth();
@@ -48,71 +57,65 @@ export default function DashboardScreen() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [state, setState] = useState<LoadState>("loading");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
   const loadDashboard = useCallback(
     async (isRefresh = false) => {
+      if (!user?.id) {
+        setState("empty");
+        return;
+      }
+
       setState(isRefresh ? "refreshing" : "loading");
       setErrorMsg(null);
 
       try {
-        if (!user?.id) {
-          setState("empty");
-          return;
-        }
-
-        // Прямой запрос к Supabase с реальными колонками.
-        // RLS-политика на таблице trades должна разрешать SELECT
-        // для аутентифицированного пользователя свои записей.
         const { data, error } = await supabase
           .from("trades")
-          .select(
-            "id, user_id, exchange, external_id, symbol, side, qty, " +
-              "entry_price, close_price, realized_pnl, fee, funding, " +
-              "opened_at, closed_at, notes, raw",
-          )
+          .select(TRADES_SELECT)
           .eq("user_id", user.id)
-          .order("closed_at", { ascending: false })
+          .order("closed_at", { ascending: false, nullsFirst: false })
           .limit(50);
 
         if (error) throw new Error(error.message);
 
-        const rows: Trade[] = ((data ?? []) as unknown) as Trade[];
+        const rows: Trade[] = (data ?? []) as unknown as Trade[];
+        if (!mountedRef.current) return;
 
         setTrades(rows);
 
-        // Закрытые сделки (closed_at != null) — для P&L и win-rate.
-        // Активные (closed_at == null) — для счётчика "активных".
-        const closed = rows.filter((t) => t.closed_at);
+        const closed = rows.filter((t) => t.closed_at != null);
         const netPnls = closed.map(tradeNetPnl);
         const wins = netPnls.filter((p) => p > 0).length;
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
         const todayTrades = closed.filter(
-          (t) => new Date(t.closed_at).getTime() >= today.getTime(),
+          (t) =>
+            t.closed_at != null &&
+            new Date(t.closed_at).getTime() >= todayStart.getTime(),
         );
         const todayPnl = todayTrades.reduce(
           (sum, t) => sum + tradeNetPnl(t),
           0,
         );
 
-        // Average P&L per trade — вместо ROI% (нет данных о депозите).
-        const avgPnl = closed.length > 0
-          ? netPnls.reduce((a, b) => a + b, 0) / closed.length
-          : 0;
+        const totalPnl = netPnls.reduce((a, b) => a + b, 0);
+        const avgPnl = closed.length > 0 ? totalPnl / closed.length : 0;
 
         setStats({
-          totalPnl: netPnls.reduce((a, b) => a + b, 0),
-          totalPnlPercent: avgPnl,
+          totalPnl,
+          avgPnlPerTrade: avgPnl,
           winRate: closed.length > 0 ? (wins / closed.length) * 100 : 0,
           totalTrades: rows.length,
-          activeTrades: rows.filter((t) => !t.closed_at).length,
+          activeTrades: rows.filter((t) => t.closed_at == null).length,
           todayPnl,
         });
 
         setState(rows.length > 0 ? "idle" : "empty");
       } catch (e) {
-        console.error("[Dashboard] load error:", e);
+        if (!mountedRef.current) return;
+        if (__DEV__) console.error("[Dashboard] load error:", e);
         setErrorMsg(e instanceof Error ? e.message : "Неизвестная ошибка");
         setState("error");
       }
@@ -121,7 +124,11 @@ export default function DashboardScreen() {
   );
 
   useEffect(() => {
+    mountedRef.current = true;
     loadDashboard();
+    return () => {
+      mountedRef.current = false;
+    };
   }, [loadDashboard]);
 
   const handleAddTrade = useCallback(() => {
@@ -129,13 +136,7 @@ export default function DashboardScreen() {
       router.push("/paywall");
       return;
     }
-    // ЭКРАН /trade/new ЕЩЁ НЕ СОЗДАН — это заглушка.
-    // Когда создашь app/trade/new.tsx, замени Alert на router.push("/trade/new").
-    Alert.alert(
-      "В разработке",
-      "Экран добавления сделки ещё не реализован. Создайте app/trade/new.tsx.",
-    );
-    // router.push("/trade/new");
+    // TODO: создать app/trade/new.tsx и раскомментировать router.push("/trade/new").
   }, [isPremium, stats, router]);
 
   const handleAddExchange = useCallback(() => {
@@ -153,8 +154,8 @@ export default function DashboardScreen() {
 
   const pnlColor = useMemo(() => {
     if (!stats) return colors.textMuted;
-    if (stats.totalPnl > 0) return SUCCESS_COLOR;
-    if (stats.totalPnl < 0) return DANGER_COLOR;
+    if (stats.totalPnl > 0) return colors.profit;
+    if (stats.totalPnl < 0) return colors.loss;
     return colors.textMuted;
   }, [stats]);
 
@@ -163,20 +164,15 @@ export default function DashboardScreen() {
     if (!isPremium) return "FREE";
     if (entitlement?.source === "allowlist") return "PREMIUM · BETA";
     if (entitlement?.source === "manual") return "PREMIUM · GRANT";
-    if (entitlement?.source === "revenuecat") return "PREMIUM";
     return "PREMIUM";
   }, [isPremium, entitlement, subLoading]);
 
   const greetingName = useMemo(() => {
     if (!user) return "";
-    const meta = (user as any).user_metadata ?? {};
+    const meta = user.user_metadata ?? {};
     const fullName: string = meta.full_name || meta.name || "";
-    if (fullName) {
-      return fullName.split(" ")[0];
-    }
-    if (user.email) {
-      return user.email.split("@")[0];
-    }
+    if (fullName) return fullName.split(" ")[0];
+    if (user.email) return user.email.split("@")[0];
     return "";
   }, [user]);
 
@@ -230,9 +226,7 @@ export default function DashboardScreen() {
           )}
         </View>
         <View style={[styles.badge, isPremium && styles.badgePremium]}>
-          <Text
-            style={[styles.badgeText, isPremium && styles.badgeTextPremium]}
-          >
+          <Text style={[styles.badgeText, isPremium && styles.badgeTextPremium]}>
             {premiumBadgeText}
           </Text>
         </View>
@@ -263,10 +257,10 @@ export default function DashboardScreen() {
           </Text>
           <View style={styles.pnlMeta}>
             <View style={styles.pnlMetaItem}>
-              <Text style={styles.pnlMetaLabel}>AVG/TRADE</Text>
+              <Text style={styles.pnlMetaLabel}>AVG / TRADE</Text>
               <Text style={[styles.pnlMetaValue, { color: pnlColor }]}>
-                {stats.totalPnlPercent >= 0 ? "+" : ""}
-                {stats.totalPnlPercent.toFixed(2)} USDT
+                {stats.avgPnlPerTrade >= 0 ? "+" : ""}
+                {stats.avgPnlPerTrade.toFixed(2)} USDT
               </Text>
             </View>
             <View style={styles.pnlMetaDivider} />
@@ -275,9 +269,7 @@ export default function DashboardScreen() {
               <Text
                 style={[
                   styles.pnlMetaValue,
-                  {
-                    color: stats.todayPnl >= 0 ? SUCCESS_COLOR : DANGER_COLOR,
-                  },
+                  { color: stats.todayPnl >= 0 ? colors.profit : colors.loss },
                 ]}
               >
                 {stats.todayPnl >= 0 ? "+" : ""}
@@ -340,9 +332,6 @@ export default function DashboardScreen() {
             <Text style={styles.emptyStateDesc}>
               Добавьте первую сделку, чтобы начать отслеживать P&L
             </Text>
-            <Pressable style={styles.emptyStateButton} onPress={handleAddTrade}>
-              <Text style={styles.emptyStateButtonText}>+ Добавить сделку</Text>
-            </Pressable>
           </View>
         ) : (
           <View style={styles.tradesList}>
@@ -350,7 +339,8 @@ export default function DashboardScreen() {
               const isLong = trade.side === "long";
               const net = tradeNetPnl(trade);
               const isPositive = net >= 0;
-              const isOpen = !trade.closed_at;
+              const isOpen = trade.closed_at == null;
+              const pnlColor = isPositive ? colors.profit : colors.loss;
               return (
                 <View key={trade.id} style={styles.tradeRow}>
                   <View
@@ -382,37 +372,13 @@ export default function DashboardScreen() {
                       {EXCHANGE_LABELS[trade.exchange] ?? trade.exchange} ·{" "}
                       {isOpen
                         ? "открыта"
-                        : new Date(trade.closed_at).toLocaleDateString("ru-RU")}
+                        : new Date(trade.closed_at!).toLocaleDateString("ru-RU")}
                     </Text>
                   </View>
                   <View style={styles.tradePnl}>
-                    <Text
-                      style={[
-                        styles.tradePnlValue,
-                        {
-                          color: isPositive ? SUCCESS_COLOR : DANGER_COLOR,
-                        },
-                      ]}
-                    >
+                    <Text style={[styles.tradePnlValue, { color: pnlColor }]}>
                       {isPositive ? "+" : ""}
                       {net.toFixed(2)}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.tradePnlPercent,
-                        {
-                          color: isPositive ? SUCCESS_COLOR : DANGER_COLOR,
-                        },
-                      ]}
-                    >
-                      {trade.entry_price && trade.close_price
-                        ? (
-                            ((trade.close_price - trade.entry_price) /
-                              trade.entry_price) *
-                            100 *
-                            (isLong ? 1 : -1)
-                          ).toFixed(1) + "%"
-                        : "—"}
                     </Text>
                   </View>
                 </View>
@@ -576,8 +542,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   tradeSideIndicator: { width: 3, height: 36, borderRadius: 2 },
-  tradeSideLong: { backgroundColor: SUCCESS_COLOR },
-  tradeSideShort: { backgroundColor: DANGER_COLOR },
+  tradeSideLong: { backgroundColor: colors.profit },
+  tradeSideShort: { backgroundColor: colors.loss },
   tradeInfo: { flex: 1, gap: 4 },
   tradeSymbolRow: {
     flexDirection: "row",
@@ -607,7 +573,6 @@ const styles = StyleSheet.create({
   tradeMeta: { fontSize: 11, color: colors.textMuted },
   tradePnl: { alignItems: "flex-end", gap: 2 },
   tradePnlValue: { fontSize: 14, fontWeight: "700" },
-  tradePnlPercent: { fontSize: 11, fontWeight: "500" },
   emptyState: {
     backgroundColor: colors.surface,
     borderRadius: 12,
@@ -621,12 +586,4 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: "center",
   },
-  emptyStateButton: {
-    marginTop: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: colors.accent,
-    borderRadius: 8,
-  },
-  emptyStateButtonText: { color: "#fff", fontSize: 13, fontWeight: "600" },
 });

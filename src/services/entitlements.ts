@@ -1,16 +1,5 @@
 import { supabase } from "@/services/auth";
-import {
-  isPremiumUser as rcIsPremium,
-  refreshSubscriptionState,
-} from "@/services/subscriptions";
-
-export interface Entitlement {
-  isPremium: boolean;
-  isAllowlisted: boolean;
-  expiresAt: Date | null;
-  note: string | null;
-  source: "allowlist" | "manual" | "revenuecat" | "none";
-}
+import type { Entitlement } from "@/shared/types";
 
 const EMPTY: Entitlement = {
   isPremium: false,
@@ -20,35 +9,26 @@ const EMPTY: Entitlement = {
   source: "none",
 };
 
+/**
+ * Получение entitlement пользователя из БД через Supabase RPC.
+ *
+ * RPC get_my_entitlement() объявлен как SECURITY DEFINER и возвращает
+ * запись из public.user_entitlements для текущего auth.uid().
+ */
 export async function fetchEntitlement(): Promise<Entitlement> {
   try {
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    console.log("[Entitlements] fetchEntitlement() called, user:", user?.id ?? "null", user?.email ?? "");
-
     if (!user) return EMPTY;
 
-    console.log("[Entitlements] calling RPC get_my_entitlement...");
     const { data, error } = await supabase.rpc("get_my_entitlement");
-
-    console.log("[Entitlements] RPC raw result:", JSON.stringify(data));
-    console.log("[Entitlements] RPC:", {
-      data,
-      error: error ? { message: error.message, code: error.code } : null,
-    });
 
     if (error || !data) return EMPTY;
 
-    // RPC может вернуть пустой массив (если для пользователя нет записи).
-    // Раньше row = data[0] = undefined, и row.expires_at падал с TypeError →
-    // catch возвращал EMPTY (FREE). Теперь обрабатываем явно.
     const row = Array.isArray(data) ? data[0] : data;
-    if (!row) {
-      console.log("[Entitlements] нет записи entitlement для пользователя");
-      return EMPTY;
-    }
+    if (!row) return EMPTY;
 
     const isExpired =
       row.expires_at && new Date(row.expires_at).getTime() < Date.now();
@@ -61,30 +41,17 @@ export async function fetchEntitlement(): Promise<Entitlement> {
       source: row.is_allowlisted ? "allowlist" : "manual",
     };
   } catch (e) {
-    console.error("[Entitlements] exception:", e);
+    if (__DEV__) console.error("[Entitlements] fetchEntitlement error:", e);
     return EMPTY;
   }
 }
 
+/**
+ * Проверка premium-статуса. Единственный источник правды — БД Supabase.
+ *
+ * Раньше здесь был также вызов refreshSubscriptionState() из subscriptions.ts
+ * (RevenueCat stub), который всегда возвращал false. Убран за ненадобностью.
+ */
 export async function checkPremiumStatus(): Promise<Entitlement> {
-  const [dbEntitlement] = await Promise.all([
-    fetchEntitlement(),
-    refreshSubscriptionState().catch(() => null),
-  ]);
-
-  const isPremium = dbEntitlement.isPremium || rcIsPremium();
-
-  return {
-    ...dbEntitlement,
-    isPremium,
-    source: isPremium
-      ? dbEntitlement.isPremium
-        ? dbEntitlement.source
-        : "revenuecat"
-      : "none",
-  };
-}
-
-export async function isPremium(): Promise<boolean> {
-  return (await checkPremiumStatus()).isPremium;
+  return fetchEntitlement();
 }

@@ -1,8 +1,8 @@
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/context/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { colors } from "@/theme/colors";
 import { useRouter } from "expo-router";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
@@ -12,7 +12,7 @@ export default function SettingsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.email}>{user?.email}</Text>
+        <Text style={styles.email}>{user?.email ?? "—"}</Text>
         <View
           style={[
             styles.badge,
@@ -42,11 +42,12 @@ export default function SettingsScreen() {
 
       <TouchableOpacity
         style={styles.logoutButton}
-        onPress={() => {
-          Alert.alert("Выход", "Выйти из аккаунта?", [
-            { text: "Отмена" },
-            { text: "Выйти", onPress: logout },
-          ]);
+        onPress={async () => {
+          try {
+            await logout();
+          } catch (e) {
+            if (__DEV__) console.error("Logout error:", e);
+          }
         }}
       >
         <Text style={styles.logoutText}>Выйти</Text>

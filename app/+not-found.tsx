@@ -1,18 +1,16 @@
 import { colors } from "@/theme/colors";
 import { Link, Stack } from "expo-router";
-import { StyleSheet, Text, View } from "react-native";
+import { SafeAreaView, StyleSheet, Text, View } from "react-native";
 
 export default function NotFoundScreen() {
   return (
-    <>
+    <SafeAreaView style={styles.container}>
       <Stack.Screen options={{ title: "Не найдено" }} />
-      <View style={styles.container}>
-        <Text style={styles.text}>Экран не найден</Text>
-        <Link href="/" style={styles.link}>
-          На главную
-        </Link>
-      </View>
-    </>
+      <Text style={styles.text}>Экран не найден</Text>
+      <Link href="/" style={styles.link}>
+        На главную
+      </Link>
+    </SafeAreaView>
   );
 }
 

@@ -1,7 +1,8 @@
 import { api } from "@/services/api";
+import type { ApiExchange, Connection } from "@/shared/types";
 import { EXCHANGES, EXCHANGE_LABELS } from "@/shared/types";
 import { colors } from "@/theme/colors";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,35 +14,37 @@ import {
   View,
 } from "react-native";
 
-// ВАЖНО: НЕ используем @react-native-picker/picker — это нативный модуль,
-// который не работает в Expo Go и вызывает краш при загрузке бандла.
-// Вместо этого — горизонтальный скролл с кнопками бирж.
-// Это работает на всех платформах (Expo Go, dev build, web, standalone).
-
 export default function ConnectionsScreen() {
-  const [connections, setConnections] = useState<any[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [exchange, setExchange] = useState<(typeof EXCHANGES)[number]>(EXCHANGES[0]);
+  const [exchange, setExchange] = useState<ApiExchange>(EXCHANGES[0]);
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
   const [saving, setSaving] = useState(false);
+  const mountedRef = useRef(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await api.getConnections();
-      setConnections(data.connections ?? []);
+      if (mountedRef.current) setConnections(data.connections ?? []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (mountedRef.current) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     load();
+    return () => {
+      mountedRef.current = false;
+    };
   }, [load]);
 
   const submit = async () => {
@@ -59,8 +62,8 @@ export default function ConnectionsScreen() {
     }
   };
 
-  const disconnect = (ex: string) => {
-    Alert.alert("Отключить", `Отключить ${EXCHANGE_LABELS[ex] ?? ex}?`, [
+  const disconnect = (ex: ApiExchange) => {
+    Alert.alert("Отключить", `Отключить ${EXCHANGE_LABELS[ex]}?`, [
       { text: "Отмена" },
       {
         text: "Да",
@@ -122,8 +125,6 @@ export default function ConnectionsScreen() {
 
       <Text style={[styles.title, { marginTop: 24 }]}>Добавить</Text>
       <View style={styles.form}>
-        {/* Селектор биржи — горизонтальный скролл с кнопками.
-            Заменяет @react-native-picker/picker, который не работает в Expo Go. */}
         <View>
           <Text style={styles.fieldLabel}>Биржа</Text>
           <ScrollView
@@ -165,6 +166,7 @@ export default function ConnectionsScreen() {
             value={apiKey}
             onChangeText={setApiKey}
             autoCapitalize="none"
+            autoCorrect={false}
           />
         </View>
 
@@ -178,11 +180,15 @@ export default function ConnectionsScreen() {
             onChangeText={setApiSecret}
             secureTextEntry
             autoCapitalize="none"
+            autoCorrect={false}
           />
         </View>
 
         <TouchableOpacity
-          style={[styles.button, (saving || !apiKey || !apiSecret) && styles.buttonDisabled]}
+          style={[
+            styles.button,
+            (saving || !apiKey || !apiSecret) && styles.buttonDisabled,
+          ]}
           onPress={submit}
           disabled={saving || !apiKey || !apiSecret}
         >
