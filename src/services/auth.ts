@@ -83,31 +83,16 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 // ─────────────────────────────────────────────────────────────────────────────
 // Sign in with Google — гибридный OAuth flow
 // ─────────────────────────────────────────────────────────────────────────────
-//
-// **Web**: Supabase сам редиректит на Google и обратно.
-//
-// **Expo Go**: WebBrowser.openAuthSessionAsync открывает Custom Tab,
-// привязанный к Expo Go. Custom Tab перехватывает exp:// redirect и
-// возвращает { type: "success", url: "exp://...?code=..." }. Код обменивается
-// здесь же, в signInWithGoogle.
-//
-// **Standalone APK**: Linking.openURL открывает системный браузер. После OAuth
-// Android открывает приложение через intent (futurestracker://...). Expo Router
-// монтирует app/auth/callback.tsx, который через useLocalSearchParams() получает
-// code и обменивает его.
 
 const isExpoGo =
   Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
-/** Извлекает параметр code из URL любого формата. */
+/** Извлекает параметр code из URL любого формата (exp://, futurestracker://, https://). */
 function extractCodeFromUrl(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    return parsed.searchParams.get("code");
-  } catch {
-    const match = url.match(/[?&]code=([^&]+)/);
-    return match ? decodeURIComponent(match[1]) : null;
-  }
+  // Regex работает для всех URL форматов (exp://, futurestracker://, https://).
+  // new URL() плохо парсит custom scheme на RN/Hermes — используем regex.
+  const match = url.match(/[?&]code=([^&#]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 export async function signInWithGoogle(): Promise<void> {
@@ -148,14 +133,30 @@ export async function signInWithGoogle(): Promise<void> {
   if (isExpoGo) {
     // ─── Expo Go: WebBrowser.openAuthSessionAsync ─────────────────────────
     const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-    if (__DEV__) console.log("[Auth] WebBrowser result:", res.type);
+    if (__DEV__) console.log("[Auth] WebBrowser result type:", res.type);
 
     if (res.type === "success" && "url" in res && res.url) {
+      if (__DEV__)
+        console.log("[Auth] WebBrowser result url:", res.url.slice(0, 200));
       const code = extractCodeFromUrl(res.url);
       if (code) {
-        if (__DEV__) console.log("[Auth] Got code, exchanging...");
-        await exchangeCodeForSession(code);
+        if (__DEV__) console.log("[Auth] Got code, exchanging for session...");
+        try {
+          await exchangeCodeForSession(code);
+          if (__DEV__) console.log("[Auth] session established");
+        } catch (e) {
+          if (__DEV__) console.error("[Auth] exchangeCodeForSession error:", e);
+          throw e;
+        }
+      } else {
+        if (__DEV__)
+          console.log("[Auth] no code in URL — Supabase вернул URL без code=");
       }
+    } else if (res.type === "dismiss" || res.type === "cancel") {
+      if (__DEV__)
+        console.log(
+          "[Auth] WebBrowser dismissed — пользователь закрыл браузер",
+        );
     }
     return;
   }
