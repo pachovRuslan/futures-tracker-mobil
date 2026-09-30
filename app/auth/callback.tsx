@@ -1,6 +1,6 @@
 import { exchangeCodeForSession, supabase } from "@/services/auth";
 import { colors } from "@/theme/colors";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useEffect, useRef } from "react";
 import {
   ActivityIndicator,
@@ -13,7 +13,6 @@ import {
 export default function AuthCallback() {
   const router = useRouter();
   const isHandled = useRef(false);
-  const params = useLocalSearchParams<{ code?: string; error?: string }>();
 
   useEffect(() => {
     let unsub: { unsubscribe: () => void } | null = null;
@@ -47,7 +46,6 @@ export default function AuthCallback() {
       if (!url) return false;
       if (__DEV__) console.log("[Callback] processing URL:", url.slice(0, 120));
 
-      // Извлекаем code любым способом
       const match = url.match(/[?&]code=([^&#]+)/);
       if (match) {
         const code = decodeURIComponent(match[1]);
@@ -56,10 +54,8 @@ export default function AuthCallback() {
         return true;
       }
 
-      // Проверяем error
       const errorMatch = url.match(/[?&]error=([^&#]+)/);
       if (errorMatch) {
-        if (__DEV__) console.warn("[Callback] OAuth error:", errorMatch[1]);
         redirect("/login");
         return true;
       }
@@ -67,40 +63,28 @@ export default function AuthCallback() {
       return false;
     };
 
-    // 1. Проверяем, есть ли уже сессия (Expo Go путь через WebBrowser.openAuthSessionAsync)
+    // 1. СНАЧАЛА проверяем существующую сессию (WebBrowser путь уже обменял код)
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (isHandled.current) return;
       if (session?.user) {
-        if (__DEV__)
-          console.log("[Callback] session already exists, redirecting");
         redirect("/");
         return;
       }
 
-      // 2. Проверяем useLocalSearchParams (основной путь для standalone APK)
-      if (params.code) {
-        if (__DEV__) console.log("[Callback] code from params");
-        handleCode(params.code);
-        return;
-      }
-
-      // 3. Проверяем Linking.getInitialURL (когда приложение открылось через intent)
+      // 2. Получаем initial URL (когда приложение открылось через intent/deep link)
       Linking.getInitialURL().then((url) => {
         if (isHandled.current) return;
-        if (!processUrl(url)) {
-          if (__DEV__)
-            console.log("[Callback] no code in initial URL, waiting...");
-        }
+        processUrl(url);
       });
     });
 
-    // 4. Слушаем новые URL (когда приложение уже запущено)
+    // 3. Слушаем новые URL (когда приложение уже запущено)
     linkingSub = Linking.addEventListener("url", ({ url }) => {
       if (isHandled.current) return;
       processUrl(url);
     });
 
-    // 5. Fallback через onAuthStateChange
+    // 4. Fallback через onAuthStateChange
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "INITIAL_SESSION") return;
       if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
@@ -111,7 +95,7 @@ export default function AuthCallback() {
     });
     unsub = data.subscription;
 
-    // 6. Timeout fallback на 5 секунд
+    // 5. Timeout fallback
     const timer = setTimeout(async () => {
       if (isHandled.current) return;
       const { data: sd } = await supabase.auth.getSession();
@@ -123,7 +107,7 @@ export default function AuthCallback() {
       unsub?.unsubscribe();
       linkingSub?.remove();
     };
-  }, [router, params.code, params.error]);
+  }, [router]);
 
   return (
     <View style={styles.container}>
