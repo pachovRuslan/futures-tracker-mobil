@@ -1,17 +1,14 @@
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/shared/config";
 import { createClient, type User } from "@supabase/supabase-js";
 import { makeRedirectUri } from "expo-auth-session";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import * as SecureStore from "expo-secure-store";
+import * as WebBrowser from "expo-web-browser";
 import { Linking, Platform } from "react-native";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Safe storage (web → localStorage, native → SecureStore)
 // ─────────────────────────────────────────────────────────────────────────────
-//
-// На вебе localStorage может быть недоступен в SSR / инкогнито.
-// На native SecureStore имеет лимит 2 KB на значение — сессия Supabase
-// влезает, но при росте user_metadata может упереться. Если это случится,
-// придётся перейти на AsyncStorage для storage (с пометкой о меньшей безопасности).
 
 interface SafeStorage {
   getItem: (key: string) => Promise<string | null>;
@@ -79,27 +76,39 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     storage: safeStorage,
     autoRefreshToken: true,
     persistSession: true,
-    // На вебе — true (парсит ?code из URL автоматически).
-    // На native — false: код обменивается в app/auth/callback.tsx через
-    // supabase.auth.exchangeCodeForSession(code) с использованием useLocalSearchParams.
     detectSessionInUrl: Platform.OS === "web",
   },
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sign in with Google
+// Sign in with Google — гибридный OAuth flow
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// Flow на native (Expo Go + standalone):
-//   1. Получаем OAuth URL от Supabase с skipBrowserRedirect: true.
-//   2. Открываем системный браузер через Linking.openURL.
-//   3. После OAuth Supabase редиректит на futurestracker://auth/callback?code=...
-//   4. Expo Router открывает app/auth/callback.tsx, который через
-//      useLocalSearchParams() получает code и обменивает его на сессию.
+// **Web**: Supabase сам редиректит на Google и обратно.
 //
-// ВАЖНО: эта функция НЕ обменивает код на сессию. Это делает callback.tsx.
-// Здесь мы только открываем браузер. Сессия установится через
-// supabase.auth.onAuthStateChange SIGNED_IN, который слушает AuthProvider.
+// **Expo Go**: WebBrowser.openAuthSessionAsync открывает Custom Tab,
+// привязанный к Expo Go. Custom Tab перехватывает exp:// redirect и
+// возвращает { type: "success", url: "exp://...?code=..." }. Код обменивается
+// здесь же, в signInWithGoogle.
+//
+// **Standalone APK**: Linking.openURL открывает системный браузер. После OAuth
+// Android открывает приложение через intent (futurestracker://...). Expo Router
+// монтирует app/auth/callback.tsx, который через useLocalSearchParams() получает
+// code и обменивает его.
+
+const isExpoGo =
+  Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+/** Извлекает параметр code из URL любого формата. */
+function extractCodeFromUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    return parsed.searchParams.get("code");
+  } catch {
+    const match = url.match(/[?&]code=([^&]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+}
 
 export async function signInWithGoogle(): Promise<void> {
   const redirectUrl = makeRedirectUri({ path: "auth/callback" });
@@ -115,7 +124,7 @@ export async function signInWithGoogle(): Promise<void> {
     return;
   }
 
-  // ─── MOBILE ─────────────────────────────────────────────────────────────
+  // ─── MOBILE (Expo Go + standalone) ──────────────────────────────────────
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
@@ -132,12 +141,26 @@ export async function signInWithGoogle(): Promise<void> {
   if (!data.url) throw new Error("Supabase не вернул OAuth URL");
 
   if (__DEV__) {
-    // Логируем без code_challenge и state — они не секретные, но лишние.
     console.log("[Auth] OAuth URL:", data.url.slice(0, 100) + "...");
+    console.log("[Auth] isExpoGo:", isExpoGo);
   }
 
-  // Открываем системный браузер. После OAuth пользователь вернётся в приложение
-  // через intent (futurestracker://...), Expo Router откроет callback.tsx.
+  if (isExpoGo) {
+    // ─── Expo Go: WebBrowser.openAuthSessionAsync ─────────────────────────
+    const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+    if (__DEV__) console.log("[Auth] WebBrowser result:", res.type);
+
+    if (res.type === "success" && "url" in res && res.url) {
+      const code = extractCodeFromUrl(res.url);
+      if (code) {
+        if (__DEV__) console.log("[Auth] Got code, exchanging...");
+        await exchangeCodeForSession(code);
+      }
+    }
+    return;
+  }
+
+  // ─── Standalone: Linking.openURL ────────────────────────────────────────
   const canOpen = await Linking.canOpenURL(data.url);
   if (!canOpen) {
     throw new Error("Не удаётся открыть браузер для авторизации");
@@ -146,10 +169,12 @@ export async function signInWithGoogle(): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Exchange OAuth code for session (вызывается из app/auth/callback.tsx)
+// Exchange OAuth code for session
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function exchangeCodeForSession(code: string): Promise<User | null> {
+export async function exchangeCodeForSession(
+  code: string,
+): Promise<User | null> {
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) throw error;
   return data.user;
@@ -170,10 +195,6 @@ export async function getCurrentUser(): Promise<User | null> {
   return user;
 }
 
-/**
- * Возвращает текущий access_token из сессии Supabase.
- * Используется в api.ts для Bearer-заголовка.
- */
 export async function getAccessToken(): Promise<string | null> {
   const {
     data: { session },
