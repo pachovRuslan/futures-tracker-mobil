@@ -2,20 +2,14 @@ import { exchangeCodeForSession, supabase } from "@/services/auth";
 import { colors } from "@/theme/colors";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Linking,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
-/**
- * OAuth callback screen.
- *
- * **Standalone APK**: Expo Router парсит URL futurestracker://auth/callback?code=XXX
- * и делает параметры доступными через useLocalSearchParams(). Здесь мы обмениваем
- * код на сессию через supabase.auth.exchangeCodeForSession().
- *
- * **Expo Go**: код обменивается в signInWithGoogle() через WebBrowser.openAuthSessionAsync.
- * Этот экран может смонтироваться как fallback, но сессия уже установлена —
- * поэтому СНАЧАЛА проверяем существующую сессию, чтобы избежать двойного обмена
- * (PKCE код одноразовый, второй вызов упадёт с invalid_grant).
- */
 export default function AuthCallback() {
   const router = useRouter();
   const isHandled = useRef(false);
@@ -23,15 +17,57 @@ export default function AuthCallback() {
 
   useEffect(() => {
     let unsub: { unsubscribe: () => void } | null = null;
+    let linkingSub: { remove: () => void } | null = null;
 
     const redirect = (path: "/" | "/login") => {
       if (isHandled.current) return;
       isHandled.current = true;
       unsub?.unsubscribe();
+      linkingSub?.remove();
       setTimeout(() => router.replace(path), 100);
     };
 
-    // 0. СНАЧАЛА проверяем, есть ли уже сессия (Expo Go путь уже обменял код).
+    const handleCode = async (code: string) => {
+      try {
+        const user = await exchangeCodeForSession(code);
+        if (user) {
+          if (__DEV__)
+            console.log("[Callback] session established:", user.email);
+          redirect("/");
+        } else {
+          redirect("/login");
+        }
+      } catch (e) {
+        if (__DEV__) console.error("[Callback] exchangeCode error:", e);
+        redirect("/login");
+      }
+    };
+
+    const processUrl = (url: string | null) => {
+      if (!url) return false;
+      if (__DEV__) console.log("[Callback] processing URL:", url.slice(0, 120));
+
+      // Извлекаем code любым способом
+      const match = url.match(/[?&]code=([^&#]+)/);
+      if (match) {
+        const code = decodeURIComponent(match[1]);
+        if (__DEV__) console.log("[Callback] found code, exchanging...");
+        handleCode(code);
+        return true;
+      }
+
+      // Проверяем error
+      const errorMatch = url.match(/[?&]error=([^&#]+)/);
+      if (errorMatch) {
+        if (__DEV__) console.warn("[Callback] OAuth error:", errorMatch[1]);
+        redirect("/login");
+        return true;
+      }
+
+      return false;
+    };
+
+    // 1. Проверяем, есть ли уже сессия (Expo Go путь через WebBrowser.openAuthSessionAsync)
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (isHandled.current) return;
       if (session?.user) {
@@ -41,36 +77,30 @@ export default function AuthCallback() {
         return;
       }
 
-      // 1. Обработка error в query (Google отменил авторизацию).
-      if (params.error) {
-        if (__DEV__) console.warn("[Callback] OAuth error:", params.error);
-        redirect("/login");
+      // 2. Проверяем useLocalSearchParams (основной путь для standalone APK)
+      if (params.code) {
+        if (__DEV__) console.log("[Callback] code from params");
+        handleCode(params.code);
         return;
       }
 
-      // 2. Обработка code — основной путь для standalone APK.
-      if (params.code) {
-        exchangeCodeForSession(params.code)
-          .then((user) => {
-            if (user) {
-              if (__DEV__)
-                console.log("[Callback] session established:", user.email);
-              redirect("/");
-            } else {
-              if (__DEV__) console.warn("[Callback] no user after exchange");
-              redirect("/login");
-            }
-          })
-          .catch((e) => {
-            if (__DEV__) console.error("[Callback] exchangeCode error:", e);
-            redirect("/login");
-          });
-      } else if (__DEV__) {
-        console.log("[Callback] no code in params, waiting for auth event...");
-      }
+      // 3. Проверяем Linking.getInitialURL (когда приложение открылось через intent)
+      Linking.getInitialURL().then((url) => {
+        if (isHandled.current) return;
+        if (!processUrl(url)) {
+          if (__DEV__)
+            console.log("[Callback] no code in initial URL, waiting...");
+        }
+      });
     });
 
-    // 3. Fallback через onAuthStateChange.
+    // 4. Слушаем новые URL (когда приложение уже запущено)
+    linkingSub = Linking.addEventListener("url", ({ url }) => {
+      if (isHandled.current) return;
+      processUrl(url);
+    });
+
+    // 5. Fallback через onAuthStateChange
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "INITIAL_SESSION") return;
       if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
@@ -81,7 +111,7 @@ export default function AuthCallback() {
     });
     unsub = data.subscription;
 
-    // 4. Timeout fallback на 5 секунд.
+    // 6. Timeout fallback на 5 секунд
     const timer = setTimeout(async () => {
       if (isHandled.current) return;
       const { data: sd } = await supabase.auth.getSession();
@@ -91,6 +121,7 @@ export default function AuthCallback() {
     return () => {
       clearTimeout(timer);
       unsub?.unsubscribe();
+      linkingSub?.remove();
     };
   }, [router, params.code, params.error]);
 
