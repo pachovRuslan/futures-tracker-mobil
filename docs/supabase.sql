@@ -123,6 +123,15 @@ CREATE POLICY "users_insert_own_balance"
   ON public.balance_snapshots FOR INSERT TO authenticated
   WITH CHECK (user_id = auth.uid());
 
+-- UPDATE обязателен для .upsert(..., { onConflict: "user_id,type,snapshot_date" })
+-- в экране «Баланс»: upsert = INSERT ... ON CONFLICT DO UPDATE, и без этой
+-- политики повторное сохранение за ту же дату падает с RLS-ошибкой 42501.
+DROP POLICY IF EXISTS "users_update_own_balance" ON public.balance_snapshots;
+CREATE POLICY "users_update_own_balance"
+  ON public.balance_snapshots FOR UPDATE TO authenticated
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
 DROP POLICY IF EXISTS "users_delete_own_balance" ON public.balance_snapshots;
 CREATE POLICY "users_delete_own_balance"
   ON public.balance_snapshots FOR DELETE TO authenticated

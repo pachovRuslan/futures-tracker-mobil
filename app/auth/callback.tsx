@@ -1,4 +1,6 @@
 import {
+  consumePendingCallbackUrl,
+  describeOAuthError,
   exchangeCodeOnce,
   getSupabase,
   parseOAuthParams,
@@ -8,6 +10,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useRef } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   StyleSheet,
   Text,
@@ -50,14 +53,18 @@ export default function AuthCallback() {
         const user = await exchangeCodeOnce(code);
         redirect(user ? "/" : "/login");
       } catch (e) {
-        if (__DEV__) console.error("[Callback] exchangeCode error:", e);
+        // Ошибку показываем и в release: иначе обмен кода падал тихо, и
+        // пользователь бесконечно возвращался на экран входа без объяснений.
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error("[Callback] exchangeCode error:", msg);
+        Alert.alert("Не удалось завершить вход", msg);
         redirect("/login");
       }
     };
 
     const processUrl = (url: string | null): boolean => {
       if (!url || isHandled.current) return false;
-      if (__DEV__) console.log("[Callback] processing URL:", url.slice(0, 120));
+      console.log("[Callback] processing URL:", url.slice(0, 120));
 
       const params = parseOAuthParams(url);
 
@@ -66,13 +73,12 @@ export default function AuthCallback() {
         return true;
       }
       if (params.error) {
-        if (__DEV__) {
-          console.error(
-            "[Callback] OAuth error:",
-            params.error,
-            params.error_description,
-          );
-        }
+        console.error(
+          "[Callback] OAuth error:",
+          params.error,
+          params.error_description,
+        );
+        Alert.alert("Ошибка авторизации", describeOAuthError(params));
         redirect("/login");
         return true;
       }
@@ -92,16 +98,20 @@ export default function AuthCallback() {
 
         // 2. Cold start: приложение открыто deep link'ом.
         Linking.getInitialURL().then((url) => {
-          processUrl(url);
+          if (processUrl(url)) return;
+          // 3. Warm start: событие "url" пришло ДО монтирования экрана
+          //    (пользователь был на /login) — его перехватил глобальный
+          //    слушатель в services/auth.ts. Забираем сохранённый URL.
+          processUrl(consumePendingCallbackUrl());
         });
       });
 
-    // 3. Warm start: приложение уже запущено.
+    // 4. Warm start, событие пришло уже при смонтированном экране.
     linkingSub = Linking.addEventListener("url", ({ url }) => {
       processUrl(url);
     });
 
-    // 4. Fallback через onAuthStateChange.
+    // 5. Fallback через onAuthStateChange.
     const { data } = getSupabase().auth.onAuthStateChange((event, session) => {
       if (event === "INITIAL_SESSION") return;
       if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
@@ -112,7 +122,7 @@ export default function AuthCallback() {
     });
     unsub = data.subscription;
 
-    // 5. Timeout fallback.
+    // 6. Timeout fallback.
     const timer = setTimeout(async () => {
       if (isHandled.current) return;
       const {

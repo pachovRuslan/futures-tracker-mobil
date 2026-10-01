@@ -9,8 +9,9 @@ import {
   type SupabaseClient,
   type User,
 } from "@supabase/supabase-js";
+import { isRunningInExpoGo } from "expo";
 import { makeRedirectUri } from "expo-auth-session";
-import Constants, { ExecutionEnvironment } from "expo-constants";
+import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
 import { Linking, Platform } from "react-native";
@@ -196,32 +197,113 @@ export function parseOAuthParams(url: string): Record<string, string> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sign in with Google
+// Redirect URI для OAuth
 // ─────────────────────────────────────────────────────────────────────────────
 
-const isExpoGo =
-  Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+/**
+ * Схема приложения (app.json → "scheme"). Именно она зарегистрирована в
+ * intent-filter'ах dev- и standalone-сборок — только по ней браузер может
+ * вернуть пользователя в приложение.
+ */
+const APP_SCHEME = (() => {
+  const scheme = Constants.expoConfig?.scheme;
+  const first = Array.isArray(scheme) ? scheme[0] : scheme;
+  return first ?? "futurestracker";
+})();
+
+/** Путь OAuth-callback — соответствует роуту app/auth/callback.tsx. */
+const REDIRECT_PATH = "auth/callback";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Глобальный перехват OAuth-callback URL (warm start)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Проблема: когда приложение уже запущено (warm start), deep link
+// futurestracker://auth/callback?code=... приходит СОБЫТИЕМ Linking "url" в
+// тот момент, когда экран /auth/callback ещё НЕ смонтирован (пользователь на
+// /login). Событие получают только слушатели, зарегистрированные на момент его
+// прихода: expo-router (он навигирует на /auth/callback) и этот глобальный
+// слушатель. useEffect экрана регистрирует свой слушатель УЖЕ ПОСЛЕ события и
+// не видит URL; Linking.getInitialURL() на warm start свежий URL тоже не
+// возвращает. Код авторизации терялся, 5-секундный таймаут уводил на /login —
+// «бесконечный логин».
+//
+// Решение: слушатель на уровне модуля. Модуль auth.ts вычисляется при старте
+// приложения (через импорт app/_layout.tsx → AuthContext → auth.ts), поэтому
+// слушатель зарегистрирован ЗАРАНЕЕ и не может пропустить событие. URL
+// складывается в переменную, а экран /auth/callback забирает его при
+// монтировании (см. consumePendingCallbackUrl).
+// ─────────────────────────────────────────────────────────────────────────────
+
+let pendingCallbackUrl: string | null = null;
+
+if (Platform.OS !== "web") {
+  Linking.addEventListener("url", ({ url }) => {
+    if (url.includes(`/${REDIRECT_PATH}`)) {
+      pendingCallbackUrl = url;
+    }
+  });
+}
+
+/**
+ * Возвращает и сбрасывает URL OAuth-callback, перехваченный глобальным
+ * слушателем (warm start). null — если перехваченного URL нет.
+ */
+export function consumePendingCallbackUrl(): string | null {
+  const url = pendingCallbackUrl;
+  pendingCallbackUrl = null;
+  return url;
+}
+
+/**
+ * URL, хост-часть которого — «сырой» IP (LAN-адрес дев-сервера).
+ *
+ * Supabase (GoTrue) отклоняет такие redirect URL СТРУКТУРНО — ещё ДО проверки
+ * allowlist: разрешены только loopback-адреса (RFC 8252 §7.3), см.
+ * supabase/auth → internal/utilities/request.go → IsRedirectURLValid.
+ * Отклонённый redirect_to молча заменяется на Site URL → браузер уезжает
+ * на сайт, и «возврата в приложение» не происходит.
+ */
+const IP_HOST_RE = /^[a-z][a-z0-9+.-]*:\/\/\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?(?:\/|$)/i;
 
 /**
  * Возвращает redirect URI для текущего окружения:
- *  - web:              http://localhost:8081/auth/callback
- *  - Expo Go:          exp://<LAN-IP>:8081/--/auth/callback
- *  - dev/standalone:   futurestracker://auth/callback
+ *  - web:                     https://<origin>/auth/callback
+ *  - Expo Go (tunnel):        exp://u.expo.dev/<projectId>/--/auth/callback
+ *  - Expo Go (LAN):           exp://<LAN-IP>:8081/--/auth/callback — Supabase
+ *                             такой URL не примет никогда (см. IP_HOST_RE),
+ *                             нужен --tunnel либо dev-сборка
+ *  - dev-сборка / standalone: futurestracker://auth/callback
  *
  * ⚠️ КАЖДЫЙ из этих URL должен быть добавлен в Supabase Dashboard →
- * Authentication → URL Configuration → Redirect URLs. Это самая частая
- * причина «веб работает, в Expo Go — нет»: exp://-URL не добавлен, Supabase
- * реджектит redirect, и браузер остаётся висеть на ошибке.
+ * Authentication → URL Configuration → Redirect URLs.
  */
 export function getRedirectUri(): string {
-  // Путь оставляем дефолтным: в Expo Go makeRedirectUri сам подставит
-  // scheme `exp` и префикс `--` для expo-router. Явно передавать
-  // scheme: "futurestracker" НЕЛЬЗЯ — Expo Go не сможет перехватить
-  // чужой scheme, и браузер не вернёт пользователя в приложение.
-  return makeRedirectUri({ path: "auth/callback" });
+  // Web: makeRedirectUri вернёт window.location.origin + "/auth/callback".
+  if (Platform.OS === "web") {
+    return makeRedirectUri({ path: REDIRECT_PATH });
+  }
+
+  // Expo Go: приложение физически не владеет схемой futurestracker:// и не
+  // может её перехватить — единственный рабочий вариант это exp://
+  // (makeRedirectUri сам подставит hostUri дев-сервера и префикс "/--/",
+  // т.к. Expo Go исполняется как storeClient).
+  if (isRunningInExpoGo()) {
+    return makeRedirectUri({ path: REDIRECT_PATH });
+  }
+
+  // Dev-сборка (expo-dev-client) и standalone. makeRedirectUri тут
+  // использовать НЕЛЬЗЯ: в SDK 57 dev-сборка тоже исполняется как storeClient
+  // (ExecutionEnvironment.StoreClient = «Expo Go **или** development build»),
+  // где expo-linking всегда резолвит схему "exp" и приклеивает hostUri
+  // дев-сервера — на выходе ссылка вида exp://192.168.1.3:8081auth/callback,
+  // которую dev-сборка не может перехватить, а Supabase — принять. Строим
+  // ссылку сами: user-схема из app.json в dev/standalone сборке
+  // зарегистрирована манифестом.
+  return `${APP_SCHEME}://${REDIRECT_PATH}`;
 }
 
-function describeOAuthError(params: Record<string, string>): string {
+export function describeOAuthError(params: Record<string, string>): string {
   const code = params.error_code ?? params.error;
   const desc = params.error_description ?? params.error;
   if (code === "403" || /not allowed|callback/i.test(desc ?? "")) {
@@ -255,6 +337,22 @@ export async function signInWithGoogle(): Promise<void> {
     );
   }
 
+  // ─── Expo Go по LAN: Supabase отклонит redirect ещё до allowlist ────
+  // (IP-хост не loopback) и молча подставит Site URL — браузер уедет на
+  // сайт, возврата в приложение не будет. Ловим это ДО открытия браузера
+  // и объясняем, что делать, вместо непрозрачного «редирект на сайт».
+  if (isRunningInExpoGo() && IP_HOST_RE.test(redirectUrl)) {
+    throw new Error(
+      `Expo Go по LAN-адресу не работает с Supabase: redirect "${redirectUrl}" ` +
+        "содержит IP-хост, который Supabase отклоняет до проверки allowlist " +
+        "(разрешён только localhost). Запустите дев-сервер с туннелем " +
+        "(npx expo start --tunnel) и добавьте в Supabase Redirect URLs запись вида " +
+        "exp://u.expo.dev/<projectId>/--/auth/callback, либо используйте " +
+        "dev-сборку (eas build --profile development) — для неё redirect " +
+        "futurestracker://auth/callback уже настроен.",
+    );
+  }
+
   // ─── NATIVE: получаем OAuth URL и открываем сами ─────────────────────────
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
@@ -269,15 +367,15 @@ export async function signInWithGoogle(): Promise<void> {
   if (error) throw error;
   if (!data.url) throw new Error("Supabase не вернул OAuth URL");
 
-  // ─── Standalone / dev-client: системный браузер + deep link ──────────────
-  if (!isExpoGo) {
+  // ─── Dev-сборка / standalone: системный браузер + deep link ────────────────
+  if (!isRunningInExpoGo()) {
     const canOpen = await Linking.canOpenURL(data.url);
     if (!canOpen) throw new Error("Не удаётся открыть браузер для авторизации");
     await Linking.openURL(data.url);
     return;
   }
 
-  // ─── Expo Go: встроенная auth-сессия ──────────────────────────────────────
+  // ─── Expo Go (только tunnel/localhost): встроенная auth-сессия ──────
   const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
 
   if (res.type === "cancel" || res.type === "dismiss") {

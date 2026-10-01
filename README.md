@@ -47,19 +47,33 @@ EXPO_PUBLIC_API_URL=https://futures-tracker-lake.vercel.app
 
 ### Redirect URLs по окружениям
 
-| Окружение | Redirect URI |
-|---|---|
-| Web (localhost) | `http://localhost:8081/auth/callback` |
-| Expo Go (LAN) | `exp://<ваш-LAN-IP>:8081/--/auth/callback` |
-| Expo Go (tunnel) | `exp://u.expo.dev/<project-id>/--/auth/callback` |
-| Dev build / standalone | `futurestracker://auth/callback` |
+| Окружение | Redirect URI | Работает с Supabase? |
+|---|---|---|
+| Web (localhost:8081) | `http://localhost:8081/auth/callback` | да |
+| Expo Go (**tunnel**) | `exp://u.expo.dev/<projectId>/--/auth/callback` | да |
+| Expo Go (LAN, IP) | `exp://<LAN-IP>:8081/--/auth/callback` | **НЕТ — см. ниже** |
+| Dev build / standalone | `futurestracker://auth/callback` | да |
 
 Актуальный URI для конкретного запуска приложение печатает в консоль
 dev-сервера при каждом нативном логине (`[Auth] redirect URI …`).
 
-> ⚠️ IP-адрес в Expo Go меняется при смене Wi-Fi сети — используйте
-> wildcard-паттерн в Supabase, например `exp://192.168.0.*:8081/**`,
-> либо добавляйте актуальный адрес.
+> ⚠️ **Expo Go по LAN-адресу не работает в принципе.** Supabase (GoTrue)
+> отклоняет redirect URL, хост которого — IP-адрес, отличный от `localhost`,
+> **ещё до проверки allowlist** (см. `internal/utilities/request.go` →
+> `IsRedirectURLValid`, RFC 8252 §7.3). Отклонённый redirect молча
+> заменяется на Site URL — браузер уезжает на сайт, и приложение не
+> открывается. Поэтому wildcard вида `exp://192.168.0.*:8081/**` в
+> Supabase **не помогает и не нужен**.
+>
+> Рабочие варианты для Expo Go:
+> 1. `npx expo start --tunnel` и запись
+>      `exp://u.expo.dev/<projectId>/--/auth/callback` в allowlist
+>      (`<projectId>` — `extra.eas.projectId` из app.json);
+> 2. dev-сборка (`eas build --profile development`) — redirect
+>      `futurestracker://auth/callback`, работает как в проде.
+>
+> В Expo Go с LAN-IP приложение покажет понятную ошибку с этими же
+> подсказками (см. `src/services/auth.ts` → `signInWithGoogle`).
 
 ## Структура
 
