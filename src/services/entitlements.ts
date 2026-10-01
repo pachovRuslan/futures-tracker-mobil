@@ -1,4 +1,4 @@
-import { supabase } from "@/services/auth";
+import { getSupabase } from "@/services/auth";
 import type { Entitlement } from "@/shared/types";
 
 const EMPTY: Entitlement = {
@@ -17,6 +17,7 @@ const EMPTY: Entitlement = {
  */
 export async function fetchEntitlement(): Promise<Entitlement> {
   try {
+    const supabase = getSupabase();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -46,12 +47,7 @@ export async function fetchEntitlement(): Promise<Entitlement> {
   }
 }
 
-/**
- * Проверка premium-статуса. Единственный источник правды — БД Supabase.
- *
- * Раньше здесь был также вызов refreshSubscriptionState() из subscriptions.ts
- * (RevenueCat stub), который всегда возвращал false. Убран за ненадобностью.
- */
+/** Проверка premium-статуса. Единственный источник правды — БД Supabase. */
 export async function checkPremiumStatus(): Promise<Entitlement> {
   return fetchEntitlement();
 }

@@ -1,7 +1,9 @@
+import { useSubscription } from "@/hooks/useSubscription";
 import { api } from "@/services/api";
 import type { ApiExchange, Connection } from "@/shared/types";
 import { EXCHANGES, EXCHANGE_LABELS } from "@/shared/types";
 import { colors } from "@/theme/colors";
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -15,6 +17,8 @@ import {
 } from "react-native";
 
 export default function ConnectionsScreen() {
+  const router = useRouter();
+  const { isPremium } = useSubscription();
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,6 +27,16 @@ export default function ConnectionsScreen() {
   const [apiSecret, setApiSecret] = useState("");
   const [saving, setSaving] = useState(false);
   const mountedRef = useRef(true);
+
+  // ⚠️ Гейт НА УРОВНЕ ЭКРАНА, а не только кнопки на дашборде. Раньше
+  // «Подключения бирж» в настройках вёл сюда без проверки premium —
+  // FREE-пользователь получал доступ к premium-функции через второй вход.
+  // Экранная проверка защищает и прямой deep link.
+  useEffect(() => {
+    if (!isPremium) {
+      router.replace("/paywall");
+    }
+  }, [isPremium, router]);
 
   const load = useCallback(async () => {
     setLoading(true);

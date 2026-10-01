@@ -1,6 +1,6 @@
 import { useTrades } from "@/hooks/useTrades";
 import { fmtDate, fmtPnl, tradeNetPnl } from "@/shared/trade-model";
-import { EXCHANGE_LABELS, type Trade } from "@/shared/types";
+import { EXCHANGE_LABELS, type TradeRow } from "@/shared/types";
 import { colors } from "@/theme/colors";
 import { useCallback, useMemo } from "react";
 import {
@@ -16,7 +16,7 @@ export default function TradesScreen() {
   const { trades, loading, error, reload } = useTrades();
 
   const renderItem = useCallback(
-    ({ item: t }: { item: Trade }) => {
+    ({ item: t }: { item: TradeRow }) => {
       const net = tradeNetPnl(t);
       return (
         <View style={styles.row}>
@@ -53,7 +53,7 @@ export default function TradesScreen() {
     [],
   );
 
-  const keyExtractor = useCallback((item: Trade) => item.id, []);
+  const keyExtractor = useCallback((item: TradeRow) => item.id, []);
   const ListEmptyComponent = useMemo(
     () => <Text style={styles.empty}>Сделок пока нет</Text>,
     [],

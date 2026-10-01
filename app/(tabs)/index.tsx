@@ -1,13 +1,17 @@
 import { useAuth } from "@/context/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
-import { supabase } from "@/services/auth";
-import { FREE_TRADE_LIMIT } from "@/shared/config";
-import type { Trade } from "@/shared/types";
-import { tradeNetPnl } from "@/shared/trade-model";
+import { getSupabase } from "@/services/auth";
+import { FREE_TRADE_LIMIT, TRADES_PAGE_SIZE } from "@/shared/config";
+import type { TradeRow } from "@/shared/types";
+import {
+  calculateTotalNetPnl,
+  calculateWinRate,
+  tradeNetPnl,
+} from "@/shared/trade-model";
 import { EXCHANGE_LABELS } from "@/shared/types";
 import { colors } from "@/theme/colors";
-import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -29,11 +33,10 @@ interface DashboardStats {
 
 type LoadState = "idle" | "loading" | "refreshing" | "error" | "empty";
 
-const TRADES_SELECT = [
+/** Колонки, нужные списку «Последние сделки» (без тяжёлого JSONB raw). */
+const LIST_SELECT = [
   "id",
-  "user_id",
   "exchange",
-  "external_id",
   "symbol",
   "side",
   "qty",
@@ -45,15 +48,17 @@ const TRADES_SELECT = [
   "opened_at",
   "closed_at",
   "notes",
-  "raw",
 ].join(", ");
+
+/** Колонки для агрегатов (P&L, win rate). */
+const STATS_SELECT = ["realized_pnl", "fee", "funding", "closed_at"].join(", ");
 
 export default function DashboardScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { isPremium, entitlement, loading: subLoading } = useSubscription();
 
-  const [trades, setTrades] = useState<Trade[]>([]);
+  const [trades, setTrades] = useState<TradeRow[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [state, setState] = useState<LoadState>("loading");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -70,49 +75,77 @@ export default function DashboardScreen() {
       setErrorMsg(null);
 
       try {
-        const { data, error } = await supabase
-          .from("trades")
-          .select(TRADES_SELECT)
-          .eq("user_id", user.id)
-          .order("closed_at", { ascending: false, nullsFirst: false })
-          .limit(50);
+        const supabase = getSupabase();
 
-        if (error) throw new Error(error.message);
+        // ⚠️ История бага: раньше ВСЯ статистика считалась по последним 50
+        // сделкам (.limit(50)) — из-за этого «ОБЩИЙ P&L» и «СДЕЛОК» были
+        // занижены для пользователей с >50 сделками, а гейт FREE-лимита
+        // срабатывал случайно (50 >= 50). Теперь:
+        //  - totalTrades — точный COUNT (head-запрос);
+        //  - activeTrades — точный COUNT открытых;
+        //  - P&L/win-rate — по последним TRADES_PAGE_SIZE закрытым сделкам
+        //    (для >500 сделок нужен серверный агрегат-RPC, см. README).
+        const [list, totalCount, openCount, statsRes] = await Promise.all([
+          supabase
+            .from("trades")
+            .select(LIST_SELECT)
+            .order("closed_at", { ascending: false, nullsFirst: false })
+            .limit(50),
+          supabase.from("trades").select("id", { head: true, count: "exact" }),
+          supabase
+            .from("trades")
+            .select("id", { head: true, count: "exact" })
+            .is("closed_at", null),
+          supabase
+            .from("trades")
+            .select(STATS_SELECT)
+            .not("closed_at", "is", null)
+            .order("closed_at", { ascending: false })
+            .limit(TRADES_PAGE_SIZE),
+        ]);
 
-        const rows: Trade[] = (data ?? []) as unknown as Trade[];
+        const listError = list.error ?? totalCount.error ?? openCount.error ?? statsRes.error;
+        if (listError) throw new Error(listError.message);
+
         if (!mountedRef.current) return;
 
-        setTrades(rows);
+        const recent: TradeRow[] = (list.data ?? []) as unknown as TradeRow[];
+        const closedStats = (statsRes.data ?? []) as unknown as Array<{
+          realized_pnl: number;
+          fee: number;
+          funding: number;
+          closed_at: string | null;
+        }>;
 
-        const closed = rows.filter((t) => t.closed_at != null);
-        const netPnls = closed.map(tradeNetPnl);
-        const wins = netPnls.filter((p) => p > 0).length;
+        setTrades(recent);
 
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
-        const todayTrades = closed.filter(
-          (t) =>
-            t.closed_at != null &&
-            new Date(t.closed_at).getTime() >= todayStart.getTime(),
-        );
-        const todayPnl = todayTrades.reduce(
-          (sum, t) => sum + tradeNetPnl(t),
-          0,
-        );
+        const todayPnl = closedStats
+          .filter(
+            (t) =>
+              t.closed_at != null &&
+              new Date(t.closed_at).getTime() >= todayStart.getTime(),
+          )
+          .reduce((sum, t) => sum + tradeNetPnl(t), 0);
 
-        const totalPnl = netPnls.reduce((a, b) => a + b, 0);
-        const avgPnl = closed.length > 0 ? totalPnl / closed.length : 0;
+        const totalPnl = calculateTotalNetPnl(closedStats);
+        const closedCount = closedStats.length;
 
         setStats({
           totalPnl,
-          avgPnlPerTrade: avgPnl,
-          winRate: closed.length > 0 ? (wins / closed.length) * 100 : 0,
-          totalTrades: rows.length,
-          activeTrades: rows.filter((t) => t.closed_at == null).length,
+          avgPnlPerTrade: closedCount > 0 ? totalPnl / closedCount : 0,
+          winRate: calculateWinRate(closedStats),
+          totalTrades: totalCount.count ?? recent.length,
+          activeTrades: openCount.count ?? 0,
           todayPnl,
         });
 
-        setState(rows.length > 0 ? "idle" : "empty");
+        setState(
+          (totalCount.count ?? recent.length) > 0 || recent.length > 0
+            ? "idle"
+            : "empty",
+        );
       } catch (e) {
         if (!mountedRef.current) return;
         if (__DEV__) console.error("[Dashboard] load error:", e);
@@ -123,20 +156,24 @@ export default function DashboardScreen() {
     [user?.id],
   );
 
-  useEffect(() => {
-    mountedRef.current = true;
-    loadDashboard();
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [loadDashboard]);
+  // Перезагрузка при каждом появлении экрана (после добавления сделки,
+  // возврата с других табов) вместо одноразового mount-эффекта.
+  useFocusEffect(
+    useCallback(() => {
+      mountedRef.current = true;
+      loadDashboard();
+      return () => {
+        mountedRef.current = false;
+      };
+    }, [loadDashboard]),
+  );
 
   const handleAddTrade = useCallback(() => {
     if (!isPremium && stats && stats.totalTrades >= FREE_TRADE_LIMIT) {
       router.push("/paywall");
       return;
     }
-    // TODO: создать app/trade/new.tsx и раскомментировать router.push("/trade/new").
+    router.push("/trade/new");
   }, [isPremium, stats, router]);
 
   const handleAddExchange = useCallback(() => {
@@ -241,7 +278,7 @@ export default function DashboardScreen() {
           <View style={styles.premiumCardContent}>
             <Text style={styles.premiumCardTitle}>Upgrade to Premium</Text>
             <Text style={styles.premiumCardDesc}>
-              Авто-синк бирж · Push-уведомления · Экспорт CSV · Безлимит сделок
+              Авто-синк сделок с бирж · Безлимит ручных сделок
             </Text>
           </View>
           <Text style={styles.premiumCardArrow}>→</Text>
@@ -330,7 +367,7 @@ export default function DashboardScreen() {
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateTitle}>Пока нет сделок</Text>
             <Text style={styles.emptyStateDesc}>
-              Добавьте первую сделку, чтобы начать отслеживать P&L
+              Нажмите «Сделка», чтобы добавить первую и начать отслеживать P&L
             </Text>
           </View>
         ) : (
@@ -340,7 +377,7 @@ export default function DashboardScreen() {
               const net = tradeNetPnl(trade);
               const isPositive = net >= 0;
               const isOpen = trade.closed_at == null;
-              const pnlColor = isPositive ? colors.profit : colors.loss;
+              const rowPnlColor = isPositive ? colors.profit : colors.loss;
               return (
                 <View key={trade.id} style={styles.tradeRow}>
                   <View
@@ -376,7 +413,7 @@ export default function DashboardScreen() {
                     </Text>
                   </View>
                   <View style={styles.tradePnl}>
-                    <Text style={[styles.tradePnlValue, { color: pnlColor }]}>
+                    <Text style={[styles.tradePnlValue, { color: rowPnlColor }]}>
                       {isPositive ? "+" : ""}
                       {net.toFixed(2)}
                     </Text>

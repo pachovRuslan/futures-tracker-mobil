@@ -1,4 +1,4 @@
-import { supabase } from "@/services/auth";
+import { signInWithGoogle, getSupabase, signOut } from "@/services/auth";
 import type { User } from "@supabase/supabase-js";
 import {
   createContext,
@@ -19,7 +19,7 @@ import {
  * Это приводило к race conditions: 5 параллельных подписок, 5 вызовов
  * getCurrentUser() при mount, рассинхронизация user state.
  *
- * Теперь AuthProvider монтируется один раз в app/_layout.tsx и раздаёт
+ * AuthProvider монтируется один раз в app/_layout.tsx и раздаёт
  * user/loading/login/logout через useContext.
  */
 
@@ -40,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     mountedRef.current = true;
+    const supabase = getSupabase();
 
     // Первичная загрузка сессии.
     supabase.auth
@@ -56,24 +57,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
     // Единая подписка на изменения auth state.
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (!mountedRef.current) return;
-        if (__DEV__) {
-          console.log("[AuthProvider] event:", event, "email:", session?.user?.email);
-        }
-        setUser(session?.user ?? null);
-      },
-    );
+    const {
+      data: { subscription: authListener },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mountedRef.current) return;
+      if (__DEV__) {
+        console.log(
+          "[AuthProvider] event:",
+          event,
+          "email:",
+          session?.user?.email,
+        );
+      }
+      setUser(session?.user ?? null);
+    });
 
     return () => {
       mountedRef.current = false;
-      authListener.subscription.unsubscribe();
+      authListener.unsubscribe();
     };
   }, []);
 
   const refresh = useCallback(async () => {
-    const { data } = await supabase.auth.getUser();
+    const { data } = await getSupabase().auth.getUser();
     if (mountedRef.current) setUser(data.user);
   }, []);
 
@@ -82,14 +88,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       refresh,
-      // login/logout импортируются лениво, чтобы избежать циклической зависимости.
       login: async () => {
-        const { signInWithGoogle } = await import("@/services/auth");
         await signInWithGoogle();
-        // Сессия установится через onAuthStateChange SIGNED_IN.
+        // Сессия установится через onAuthStateChange SIGNED_IN
+        // (или уже установлена обменом кода внутри signInWithGoogle).
       },
       logout: async () => {
-        const { signOut } = await import("@/services/auth");
         await signOut();
         if (mountedRef.current) setUser(null);
       },
@@ -97,7 +101,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user, loading, refresh],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextValue {

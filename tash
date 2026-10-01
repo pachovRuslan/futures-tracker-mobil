@@ -1,0 +1,5 @@
+[33md79953b[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m fix: callback uses Linking.getInitialURL instead of useLocalSearchParams
+[33m09b2202[m fix: callback extracts code from Linking.getInitialURL on cold start
+[33md9b7bc8[m fix: enable PKCE flow to get ?code= instead of #access_token=
+[33mf4ccc26[m fix: improve OAuth logging + regex code extraction for Expo Go
+[33m2d79a20[m fix: hybrid OAuth — WebBrowser.openAuthSessionAsync for Expo Go

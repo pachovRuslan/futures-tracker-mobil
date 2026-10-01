@@ -1,4 +1,8 @@
-import { exchangeCodeForSession, supabase } from "@/services/auth";
+import {
+  exchangeCodeOnce,
+  getSupabase,
+  parseOAuthParams,
+} from "@/services/auth";
 import { colors } from "@/theme/colors";
 import { useRouter } from "expo-router";
 import { useEffect, useRef } from "react";
@@ -10,6 +14,21 @@ import {
   View,
 } from "react-native";
 
+/**
+ * Экран /auth/callback — точка возврата из OAuth-браузера.
+ *
+ * Обрабатывает redirect двумя путями:
+ *  1. Cold start: приложение было закрыто и открыто deep link'ом —
+ *     URL доступен через Linking.getInitialURL().
+ *  2. Warm start: приложение уже запущено — URL приходит событием
+ *     Linking.addEventListener("url").
+ *
+ * ВАЖНО: обмен кода выполняется через exchangeCodeOnce (не
+ * exchangeCodeForSession напрямую), потому что в Expo Go этот redirect
+ * параллельно обрабатывает и signInWithGoogle (обещание
+ * openAuthSessionAsync). PKCE-код одноразовый — без дедупликации
+ * второй обмен падает с 400 и ломает вход (см. REFACTORING.md, баг №3).
+ */
 export default function AuthCallback() {
   const router = useRouter();
   const isHandled = useRef(false);
@@ -28,64 +47,62 @@ export default function AuthCallback() {
 
     const handleCode = async (code: string) => {
       try {
-        const user = await exchangeCodeForSession(code);
-        if (user) {
-          if (__DEV__)
-            console.log("[Callback] session established:", user.email);
-          redirect("/");
-        } else {
-          redirect("/login");
-        }
+        const user = await exchangeCodeOnce(code);
+        redirect(user ? "/" : "/login");
       } catch (e) {
         if (__DEV__) console.error("[Callback] exchangeCode error:", e);
         redirect("/login");
       }
     };
 
-    const processUrl = (url: string | null) => {
-      if (!url) return false;
+    const processUrl = (url: string | null): boolean => {
+      if (!url || isHandled.current) return false;
       if (__DEV__) console.log("[Callback] processing URL:", url.slice(0, 120));
 
-      const match = url.match(/[?&]code=([^&#]+)/);
-      if (match) {
-        const code = decodeURIComponent(match[1]);
-        if (__DEV__) console.log("[Callback] found code, exchanging...");
-        handleCode(code);
+      const params = parseOAuthParams(url);
+
+      if (params.code) {
+        handleCode(params.code);
         return true;
       }
-
-      const errorMatch = url.match(/[?&]error=([^&#]+)/);
-      if (errorMatch) {
+      if (params.error) {
+        if (__DEV__) {
+          console.error(
+            "[Callback] OAuth error:",
+            params.error,
+            params.error_description,
+          );
+        }
         redirect("/login");
         return true;
       }
-
       return false;
     };
 
-    // 1. СНАЧАЛА проверяем существующую сессию (WebBrowser путь уже обменял код)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (isHandled.current) return;
-      if (session?.user) {
-        redirect("/");
-        return;
-      }
-
-      // 2. Получаем initial URL (когда приложение открылось через intent/deep link)
-      Linking.getInitialURL().then((url) => {
+    // 1. Сначала проверяем существующую сессию — её мог установить
+    //    параллельный обработчик (signInWithGoogle в Expo Go).
+    getSupabase()
+      .auth.getSession()
+      .then(({ data: { session } }) => {
         if (isHandled.current) return;
-        processUrl(url);
-      });
-    });
+        if (session?.user) {
+          redirect("/");
+          return;
+        }
 
-    // 3. Слушаем новые URL (когда приложение уже запущено)
+        // 2. Cold start: приложение открыто deep link'ом.
+        Linking.getInitialURL().then((url) => {
+          processUrl(url);
+        });
+      });
+
+    // 3. Warm start: приложение уже запущено.
     linkingSub = Linking.addEventListener("url", ({ url }) => {
-      if (isHandled.current) return;
       processUrl(url);
     });
 
-    // 4. Fallback через onAuthStateChange
-    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    // 4. Fallback через onAuthStateChange.
+    const { data } = getSupabase().auth.onAuthStateChange((event, session) => {
       if (event === "INITIAL_SESSION") return;
       if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
         redirect("/");
@@ -95,11 +112,13 @@ export default function AuthCallback() {
     });
     unsub = data.subscription;
 
-    // 5. Timeout fallback
+    // 5. Timeout fallback.
     const timer = setTimeout(async () => {
       if (isHandled.current) return;
-      const { data: sd } = await supabase.auth.getSession();
-      redirect(sd.session ? "/" : "/login");
+      const {
+        data: { session },
+      } = await getSupabase().auth.getSession();
+      redirect(session ? "/" : "/login");
     }, 5000);
 
     return () => {

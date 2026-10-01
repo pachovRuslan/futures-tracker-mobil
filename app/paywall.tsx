@@ -12,11 +12,10 @@ import {
   View,
 } from "react-native";
 
+/** Только реально существующие возможности Premium (см. REFACTORING.md). */
 const FEATURES = [
-  { icon: "↻", title: "Авто-синк бирж", desc: "Binance, Bybit, Bitget, MEXC, BingX — сделки подтягиваются сами" },
-  { icon: "↗", title: "Push-уведомления", desc: "Уведомления о закрытии сделок и важных событиях" },
-  { icon: "↧", title: "Экспорт CSV", desc: "Выгрузка истории сделок для Excel и налоговой" },
-  { icon: "∞", title: "Безлимит сделок", desc: "Без ограничений на количество записей" },
+  { icon: "↻", title: "Авто-синк бирж", desc: "Подключите API-ключи — Binance, Bybit, Bitget, MEXC, BingX подтянут сделки сами" },
+  { icon: "∞", title: "Безлимит сделок", desc: "FREE — до 50 сделок, Premium — без ограничений" },
 ] as const;
 
 export default function PaywallScreen() {
@@ -79,7 +78,7 @@ export default function PaywallScreen() {
         <View style={styles.noticeCard}>
           <Text style={styles.noticeTitle}>Как получить Premium</Text>
           <Text style={styles.noticeText}>
-            In-App Purchases скоро будут доступны. Сейчас Premium выдаётся
+            Покупка внутри приложения появится позже. Сейчас Premium выдаётся
             вручную через админ-панель Supabase (таблица user_entitlements).
           </Text>
           {user?.email ? (

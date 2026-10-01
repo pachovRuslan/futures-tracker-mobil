@@ -1,11 +1,11 @@
 /**
  * Доменные типы приложения Futures Tracker.
  *
- * Соответствуют схеме таблиц в Supabase:
+ * Соответствуют схеме таблиц в Supabase (docs/supabase.sql):
  *   - public.trades
  *   - public.balance_snapshots
  *   - public.user_entitlements
- *   - public.connections (через REST API)
+ *   - public.connections (через REST API бэкенда)
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -65,24 +65,52 @@ export interface Trade {
   fee: number;
   funding: number;
   opened_at: string | null;
-  /** closed_at может быть null для открытых позиций, несмотря на схему NOT NULL. */
+  /** NULL — позиция ещё открыта (схема БД допускает NULL). */
   closed_at: string | null;
   notes: string | null;
   raw: unknown;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Aggregates
-// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Строка сделки, которую реально читают экраны приложения.
+ * В отличие от Trade, не тянет тяжёлый JSONB `raw` из БД.
+ */
+export type TradeRow = Pick<
+  Trade,
+  | "id"
+  | "exchange"
+  | "symbol"
+  | "side"
+  | "qty"
+  | "entry_price"
+  | "close_price"
+  | "realized_pnl"
+  | "fee"
+  | "funding"
+  | "opened_at"
+  | "closed_at"
+  | "notes"
+>;
 
-export interface MonthlySummary {
-  month: string; // "YYYY-MM"
-  totalPnl: number;
-  totalFee: number;
-  totalFunding: number;
-  netPnl: number;
-  tradeCount: number;
-  winRate: number;
+/** Поля, необходимые для расчёта net P&L. */
+export type PnlFields = Pick<Trade, "realized_pnl" | "fee" | "funding">;
+
+/** Payload ручной вставки сделки напрямую в Supabase (RLS: user_id = auth.uid()). */
+export interface TradeInsert {
+  user_id: string;
+  exchange: "manual";
+  external_id: string;
+  symbol: string;
+  side: TradeSide;
+  qty: number | null;
+  entry_price: number | null;
+  close_price: number | null;
+  realized_pnl: number;
+  fee: number;
+  funding: number;
+  opened_at: string | null;
+  closed_at: string | null;
+  notes: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -101,16 +129,7 @@ export interface BalanceSnapshot {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// User settings
-// ─────────────────────────────────────────────────────────────────────────────
-
-export interface UserSettings {
-  goal_usd: number | null;
-  futures_start_usd: number;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Exchange connections (через REST API)
+// Exchange connections (через REST API бэкенда)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface Connection {
@@ -123,6 +142,10 @@ export interface CreateConnectionPayload {
   exchange: ApiExchange;
   apiKey: string;
   apiSecret: string;
+}
+
+export interface ConnectionsResponse {
+  connections: Connection[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

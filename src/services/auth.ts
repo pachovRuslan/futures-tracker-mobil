@@ -1,5 +1,14 @@
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/shared/config";
-import { createClient, type User } from "@supabase/supabase-js";
+import {
+  isSupabaseConfigured,
+  SUPABASE_ANON_KEY,
+  SUPABASE_URL,
+} from "@/shared/config";
+import {
+  createClient,
+  type Session,
+  type SupabaseClient,
+  type User,
+} from "@supabase/supabase-js";
 import { makeRedirectUri } from "expo-auth-session";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import * as SecureStore from "expo-secure-store";
@@ -7,17 +16,80 @@ import * as WebBrowser from "expo-web-browser";
 import { Linking, Platform } from "react-native";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Safe storage (web → localStorage, native → SecureStore)
+// Storage для сессии Supabase (web → localStorage, native → SecureStore)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// ⚠️ expo-secure-store имеет жёсткий лимит 2048 байт на значение. Сессия
+// Supabase c провайдерскими токенами Google может его превышать — на Android
+// такое значение молча теряется, и сессия «не прилипает» (пользователь
+// разлогинивается после перезапуска). Поэтому длинные значения режутся на
+// чанки по 2000 символов и собираются обратно при чтении.
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface SafeStorage {
-  getItem: (key: string) => Promise<string | null>;
-  setItem: (key: string, value: string) => Promise<void>;
-  removeItem: (key: string) => Promise<void>;
+const CHUNK_SIZE = 2000;
+const chunkKey = (key: string, i: number) => `${key}__${i}`;
+const chunksMetaKey = (key: string) => `${key}__chunks`;
+
+async function secureGet(key: string): Promise<string | null> {
+  const meta = await SecureStore.getItemAsync(chunksMetaKey(key));
+  if (meta == null) return SecureStore.getItemAsync(key);
+
+  const n = Number.parseInt(meta, 10);
+  if (!Number.isFinite(n) || n <= 0) return null;
+
+  let value = "";
+  for (let i = 0; i < n; i++) {
+    value += (await SecureStore.getItemAsync(chunkKey(key, i))) ?? "";
+  }
+  return value || null;
 }
 
-const safeStorage: SafeStorage = {
-  getItem: async (key) => {
+async function secureSet(key: string, value: string): Promise<void> {
+  await secureRemove(key);
+
+  if (value.length <= CHUNK_SIZE) {
+    await SecureStore.setItemAsync(key, value);
+    return;
+  }
+
+  const n = Math.ceil(value.length / CHUNK_SIZE);
+  await SecureStore.setItemAsync(chunksMetaKey(key), String(n));
+  for (let i = 0; i < n; i++) {
+    await SecureStore.setItemAsync(
+      chunkKey(key, i),
+      value.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE),
+    );
+  }
+}
+
+async function secureRemove(key: string): Promise<void> {
+  const meta = await SecureStore.getItemAsync(chunksMetaKey(key));
+  if (meta != null) {
+    const n = Number.parseInt(meta, 10);
+    if (Number.isFinite(n)) {
+      for (let i = 0; i < n; i++) {
+        try {
+          await SecureStore.deleteItemAsync(chunkKey(key, i));
+        } catch {
+          // ключа нет — ок
+        }
+      }
+    }
+    try {
+      await SecureStore.deleteItemAsync(chunksMetaKey(key));
+    } catch {
+      // ключа нет — ок
+    }
+  }
+  try {
+    await SecureStore.deleteItemAsync(key);
+  } catch {
+    // ключа нет — ок
+  }
+}
+
+const safeStorage = {
+  getItem: async (key: string): Promise<string | null> => {
     try {
       if (Platform.OS === "web") {
         if (typeof window !== "undefined" && window.localStorage) {
@@ -25,15 +97,13 @@ const safeStorage: SafeStorage = {
         }
         return null;
       }
-      if (SecureStore?.getItemAsync) {
-        return await SecureStore.getItemAsync(key);
-      }
+      return await secureGet(key);
     } catch (e) {
-      if (__DEV__) console.warn("[safeStorage] getItem error:", e);
+      if (__DEV__) console.warn("[auth] storage.getItem error:", e);
+      return null;
     }
-    return null;
   },
-  setItem: async (key, value) => {
+  setItem: async (key: string, value: string): Promise<void> => {
     try {
       if (Platform.OS === "web") {
         if (typeof window !== "undefined" && window.localStorage) {
@@ -41,14 +111,12 @@ const safeStorage: SafeStorage = {
         }
         return;
       }
-      if (SecureStore?.setItemAsync) {
-        await SecureStore.setItemAsync(key, value);
-      }
+      await secureSet(key, value);
     } catch (e) {
-      if (__DEV__) console.warn("[safeStorage] setItem error:", e);
+      if (__DEV__) console.warn("[auth] storage.setItem error:", e);
     }
   },
-  removeItem: async (key) => {
+  removeItem: async (key: string): Promise<void> => {
     try {
       if (Platform.OS === "web") {
         if (typeof window !== "undefined" && window.localStorage) {
@@ -56,50 +124,121 @@ const safeStorage: SafeStorage = {
         }
         return;
       }
-      if (SecureStore?.deleteItemAsync) {
-        await SecureStore.deleteItemAsync(key);
-      }
+      await secureRemove(key);
     } catch (e) {
-      if (__DEV__) console.warn("[safeStorage] removeItem error:", e);
+      if (__DEV__) console.warn("[auth] storage.removeItem error:", e);
     }
   },
 };
 
-export { safeStorage };
+// ─────────────────────────────────────────────────────────────────────────────
+// Supabase client — ленивый singleton
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Раньше createClient() вызывался на уровне модуля. Если .env не задан,
+// supabase-js бросает "supabaseUrl is required" ПРЯМО ПРИ ИМПОРТЕ — до
+// монтирования ErrorBoundary, и приложение падает белым экраном без
+// объяснений. Ленивая инициализация позволяет показать экран ошибки
+// конфигурации вместо крэша.
+// ─────────────────────────────────────────────────────────────────────────────
+
+let supabaseClient: SupabaseClient | null = null;
+
+export function getSupabase(): SupabaseClient {
+  if (supabaseClient) return supabaseClient;
+
+  if (!isSupabaseConfigured) {
+    throw new Error(
+      "Supabase не сконфигурирован: задайте EXPO_PUBLIC_SUPABASE_URL и " +
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY в .env (см. README.md) и перезапустите " +
+        "dev-сервер с --clear.",
+    );
+  }
+
+  supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      storage: safeStorage,
+      autoRefreshToken: true,
+      persistSession: true,
+      // На native URL сессии парсим сами (expo-router deep link), на web —
+      // пусть supabase-js заберёт ?code= из window.location.
+      detectSessionInUrl: Platform.OS === "web",
+      flowType: "pkce",
+    },
+  });
+  return supabaseClient;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Supabase client
+// Парсинг OAuth-параметров из redirect URL
 // ─────────────────────────────────────────────────────────────────────────────
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    storage: safeStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: Platform.OS === "web",
-    flowType: "pkce",
-  },
-});
+/**
+ * Разбирает параметры из query (?a=1) и fragment (#a=1) части URL.
+ * new URL() на RN/Hermes плохо парсит custom scheme (exp://) — поэтому regex.
+ */
+export function parseOAuthParams(url: string): Record<string, string> {
+  const params: Record<string, string> = {};
+  const m = url.match(/[?#](.*)$/);
+  if (!m) return params;
+  for (const pair of m[1].split("&")) {
+    if (!pair) continue;
+    const eq = pair.indexOf("=");
+    const k = eq === -1 ? pair : pair.slice(0, eq);
+    const v = eq === -1 ? "" : pair.slice(eq + 1);
+    try {
+      params[decodeURIComponent(k)] = decodeURIComponent(v);
+    } catch {
+      params[k] = v;
+    }
+  }
+  return params;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Sign in with Google — гибридный OAuth flow
+// Sign in with Google
 // ─────────────────────────────────────────────────────────────────────────────
 
 const isExpoGo =
   Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
-/** Извлекает параметр code из URL любого формата (exp://, futurestracker://, https://). */
-function extractCodeFromUrl(url: string): string | null {
-  // Regex работает для всех URL форматов (exp://, futurestracker://, https://).
-  // new URL() плохо парсит custom scheme на RN/Hermes — используем regex.
-  const match = url.match(/[?&]code=([^&#]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
+/**
+ * Возвращает redirect URI для текущего окружения:
+ *  - web:              http://localhost:8081/auth/callback
+ *  - Expo Go:          exp://<LAN-IP>:8081/--/auth/callback
+ *  - dev/standalone:   futurestracker://auth/callback
+ *
+ * ⚠️ КАЖДЫЙ из этих URL должен быть добавлен в Supabase Dashboard →
+ * Authentication → URL Configuration → Redirect URLs. Это самая частая
+ * причина «веб работает, в Expo Go — нет»: exp://-URL не добавлен, Supabase
+ * реджектит redirect, и браузер остаётся висеть на ошибке.
+ */
+export function getRedirectUri(): string {
+  // Путь оставляем дефолтным: в Expo Go makeRedirectUri сам подставит
+  // scheme `exp` и префикс `--` для expo-router. Явно передавать
+  // scheme: "futurestracker" НЕЛЬЗЯ — Expo Go не сможет перехватить
+  // чужой scheme, и браузер не вернёт пользователя в приложение.
+  return makeRedirectUri({ path: "auth/callback" });
+}
+
+function describeOAuthError(params: Record<string, string>): string {
+  const code = params.error_code ?? params.error;
+  const desc = params.error_description ?? params.error;
+  if (code === "403" || /not allowed|callback/i.test(desc ?? "")) {
+    return (
+      "Supabase отклонил redirect (403 / Callback URL not allowed). " +
+      "Добавьте текущий redirect URI в Supabase Dashboard → Authentication → " +
+      "URL Configuration → Redirect URLs (URI см. в консоли выше)."
+    );
+  }
+  return `Вход не выполнен: ${code ?? "unknown"} — ${desc ?? "нет описания"}`;
 }
 
 export async function signInWithGoogle(): Promise<void> {
-  const redirectUrl = makeRedirectUri({ path: "auth/callback" });
-  if (__DEV__) console.log("[Auth] redirectUrl:", redirectUrl);
+  const supabase = getSupabase();
+  const redirectUrl = getRedirectUri();
 
-  // ─── WEB ────────────────────────────────────────────────────────────────
+  // ─── WEB: полная переадресация браузера ──────────────────────────────────
   if (Platform.OS === "web") {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -109,98 +248,131 @@ export async function signInWithGoogle(): Promise<void> {
     return;
   }
 
-  // ─── MOBILE (Expo Go + standalone) ──────────────────────────────────────
+  if (__DEV__) {
+    console.log(
+      "[Auth] redirect URI (должен быть в Supabase → Auth → Redirect URLs):",
+      redirectUrl,
+    );
+  }
+
+  // ─── NATIVE: получаем OAuth URL и открываем сами ─────────────────────────
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
       redirectTo: redirectUrl,
       skipBrowserRedirect: true,
-      queryParams: {
-        access_type: "offline",
-        prompt: "consent",
-      },
+      // NOTE: access_type=offline / prompt=consent убраны — это cargo-cult из
+      // туториалов Google. Supabase сам управляет refresh-токенами, а
+      // prompt=consent заставлял показывать экран согласия при каждом входе.
     },
   });
-
   if (error) throw error;
   if (!data.url) throw new Error("Supabase не вернул OAuth URL");
 
-  if (__DEV__) {
-    console.log("[Auth] OAuth URL:", data.url.slice(0, 100) + "...");
-    console.log("[Auth] isExpoGo:", isExpoGo);
-  }
-
-  if (isExpoGo) {
-    // ─── Expo Go: WebBrowser.openAuthSessionAsync ─────────────────────────
-    const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-    if (__DEV__) console.log("[Auth] WebBrowser result type:", res.type);
-
-    if (res.type === "success" && "url" in res && res.url) {
-      if (__DEV__)
-        console.log("[Auth] WebBrowser result url:", res.url.slice(0, 200));
-      const code = extractCodeFromUrl(res.url);
-      if (code) {
-        if (__DEV__) console.log("[Auth] Got code, exchanging for session...");
-        try {
-          await exchangeCodeForSession(code);
-          if (__DEV__) console.log("[Auth] session established");
-        } catch (e) {
-          if (__DEV__) console.error("[Auth] exchangeCodeForSession error:", e);
-          throw e;
-        }
-      } else {
-        if (__DEV__)
-          console.log("[Auth] no code in URL — Supabase вернул URL без code=");
-      }
-    } else if (res.type === "dismiss" || res.type === "cancel") {
-      if (__DEV__)
-        console.log(
-          "[Auth] WebBrowser dismissed — пользователь закрыл браузер",
-        );
-    }
+  // ─── Standalone / dev-client: системный браузер + deep link ──────────────
+  if (!isExpoGo) {
+    const canOpen = await Linking.canOpenURL(data.url);
+    if (!canOpen) throw new Error("Не удаётся открыть браузер для авторизации");
+    await Linking.openURL(data.url);
     return;
   }
 
-  // ─── Standalone: Linking.openURL ────────────────────────────────────────
-  const canOpen = await Linking.canOpenURL(data.url);
-  if (!canOpen) {
-    throw new Error("Не удаётся открыть браузер для авторизации");
+  // ─── Expo Go: встроенная auth-сессия ──────────────────────────────────────
+  const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+
+  if (res.type === "cancel" || res.type === "dismiss") {
+    // Пользователь закрыл браузер — это не ошибка, просто выходим.
+    return;
   }
-  await Linking.openURL(data.url);
+
+  if (res.type !== "success" || !("url" in res) || !res.url) {
+    return;
+  }
+
+  if (__DEV__) console.log("[Auth] callback URL:", res.url);
+
+  const params = parseOAuthParams(res.url);
+
+  if (params.error) {
+    // Раньше этот случай молча игнорировался — пользователь нажимал «Войти»,
+    // браузер закрывался, и ничего не происходило (см. REFACTORING.md, баг №2).
+    throw new Error(describeOAuthError(params));
+  }
+
+  if (!params.code) {
+    throw new Error(
+      "Supabase вернул redirect без кода авторизации. Проверьте, что redirect " +
+        `URI "${redirectUrl}" добавлен в Supabase → Auth → Redirect URLs.`,
+    );
+  }
+
+  await exchangeCodeOnce(params.code);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Exchange OAuth code for session
+// Обмен OAuth code на сессию (защита от двойного обмена)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// PKCE-код одноразовый. В Expo Go redirect обрабатывают ДВА потребителя:
+//  1) обещание openAuthSessionAsync в signInWithGoogle;
+//  2) экран /auth/callback, на который навигирует expo-router по deep link.
+// Раньше оба вызывали exchangeCodeForSession с одним кодом — второй вызов
+// падал с 400 invalid_request, и login показывал «Ошибка входа» при
+// фактически установленной сессии. exchangeCodeOnce дедуплицирует коды:
+// кто первый — тот и обменивает; второй ждёт появления сессии.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function exchangeCodeForSession(
-  code: string,
-): Promise<User | null> {
-  const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-  if (error) throw error;
-  return data.user;
+const exchangedCodes = new Set<string>();
+
+async function waitForSession(timeoutMs: number): Promise<Session | null> {
+  const supabase = getSupabase();
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session?.user) return session;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return null;
+}
+
+export async function exchangeCodeOnce(code: string): Promise<User | null> {
+  const supabase = getSupabase();
+
+  if (exchangedCodes.has(code)) {
+    // Код уже обменивается другим обработчиком — ждём сессию.
+    const session = await waitForSession(6000);
+    if (session?.user) return session.user;
+    throw new Error("Таймаут ожидания сессии после обмена кода");
+  }
+
+  exchangedCodes.add(code);
+
+  try {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) throw error;
+    return data.user;
+  } catch (e) {
+    // Код мог быть расходован конкурентным путём — если сессия всё же
+    // установилась, считаем вход успешным.
+    const session = await waitForSession(1500);
+    if (session?.user) return session.user;
+    throw e;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sign out / getters
+// Sign out / access token
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function signOut(): Promise<void> {
-  await supabase.auth.signOut();
-}
-
-export async function getCurrentUser(): Promise<User | null> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+  await getSupabase().auth.signOut();
 }
 
 export async function getAccessToken(): Promise<string | null> {
   const {
     data: { session },
-  } = await supabase.auth.getSession();
+  } = await getSupabase().auth.getSession();
   return session?.access_token ?? null;
 }
-
-export { supabase };
