@@ -1,11 +1,15 @@
+import { Ionicons } from "@expo/vector-icons";
+
 import { useAuth } from "@/context/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { getSupabase } from "@/services/auth";
 import { FREE_TRADE_LIMIT, TRADES_PAGE_SIZE } from "@/shared/config";
 import type { TradeRow } from "@/shared/types";
 import {
-  calculateTotalNetPnl,
   calculateWinRate,
+  fmt,
+  fmtDate,
+  fmtPnl,
   tradeNetPnl,
 } from "@/shared/trade-model";
 import { EXCHANGE_LABELS } from "@/shared/types";
@@ -21,15 +25,7 @@ import {
   Text,
   View,
 } from "react-native";
-
-interface DashboardStats {
-  totalPnl: number;
-  avgPnlPerTrade: number;
-  winRate: number;
-  totalTrades: number;
-  activeTrades: number;
-  todayPnl: number;
-}
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type LoadState = "idle" | "loading" | "refreshing" | "error" | "empty";
 
@@ -50,18 +46,57 @@ const LIST_SELECT = [
   "notes",
 ].join(", ");
 
-/** Колонки для агрегатов (P&L, win rate). */
-const STATS_SELECT = ["realized_pnl", "fee", "funding", "closed_at"].join(", ");
+/**
+ * Колонки для агрегатов: P&L, win-rate, комиссии, фандинг, месячный ряд.
+ * exchange — для клиентского фильтра по биржам (чипы «БИРЖИ В PNL»).
+ */
+const STATS_SELECT = [
+  "exchange",
+  "realized_pnl",
+  "fee",
+  "funding",
+  "closed_at",
+].join(", ");
+
+type ClosedRow = {
+  exchange: string;
+  realized_pnl: number;
+  fee: number;
+  funding: number;
+  closed_at: string | null;
+};
+
+const MONTH_LABELS = [
+  "ЯНВ",
+  "ФЕВ",
+  "МАР",
+  "АПР",
+  "МАЙ",
+  "ИЮН",
+  "ИЮЛ",
+  "АВГ",
+  "СЕН",
+  "ОКТ",
+  "НОЯ",
+  "ДЕК",
+];
+
+const monthKey = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { isPremium, entitlement, loading: subLoading } = useSubscription();
 
   const [trades, setTrades] = useState<TradeRow[]>([]);
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [closed, setClosed] = useState<ClosedRow[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [state, setState] = useState<LoadState>("loading");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [exchangeFilter, setExchangeFilter] = useState<string>("all");
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const mountedRef = useRef(true);
 
   const loadDashboard = useCallback(
@@ -82,10 +117,9 @@ export default function DashboardScreen() {
         // занижены для пользователей с >50 сделками, а гейт FREE-лимита
         // срабатывал случайно (50 >= 50). Теперь:
         //  - totalTrades — точный COUNT (head-запрос);
-        //  - activeTrades — точный COUNT открытых;
-        //  - P&L/win-rate — по последним TRADES_PAGE_SIZE закрытым сделкам
-        //    (для >500 сделок нужен серверный агрегат-RPC, см. README).
-        const [list, totalCount, openCount, statsRes] = await Promise.all([
+        //  - P&L/win-rate/месяцы — по последним TRADES_PAGE_SIZE закрытым
+        //    сделкам (для >500 сделок нужен серверный агрегат-RPC, см. README).
+        const [list, countRes, statsRes] = await Promise.all([
           supabase
             .from("trades")
             .select(LIST_SELECT)
@@ -94,55 +128,22 @@ export default function DashboardScreen() {
           supabase.from("trades").select("id", { head: true, count: "exact" }),
           supabase
             .from("trades")
-            .select("id", { head: true, count: "exact" })
-            .is("closed_at", null),
-          supabase
-            .from("trades")
             .select(STATS_SELECT)
             .not("closed_at", "is", null)
             .order("closed_at", { ascending: false })
             .limit(TRADES_PAGE_SIZE),
         ]);
 
-        const listError = list.error ?? totalCount.error ?? openCount.error ?? statsRes.error;
+        const listError = list.error ?? countRes.error ?? statsRes.error;
         if (listError) throw new Error(listError.message);
 
         if (!mountedRef.current) return;
 
-        const recent: TradeRow[] = (list.data ?? []) as unknown as TradeRow[];
-        const closedStats = (statsRes.data ?? []) as unknown as Array<{
-          realized_pnl: number;
-          fee: number;
-          funding: number;
-          closed_at: string | null;
-        }>;
-
-        setTrades(recent);
-
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-        const todayPnl = closedStats
-          .filter(
-            (t) =>
-              t.closed_at != null &&
-              new Date(t.closed_at).getTime() >= todayStart.getTime(),
-          )
-          .reduce((sum, t) => sum + tradeNetPnl(t), 0);
-
-        const totalPnl = calculateTotalNetPnl(closedStats);
-        const closedCount = closedStats.length;
-
-        setStats({
-          totalPnl,
-          avgPnlPerTrade: closedCount > 0 ? totalPnl / closedCount : 0,
-          winRate: calculateWinRate(closedStats),
-          totalTrades: totalCount.count ?? recent.length,
-          activeTrades: openCount.count ?? 0,
-          todayPnl,
-        });
-
+        setTrades((list.data ?? []) as unknown as TradeRow[]);
+        setClosed((statsRes.data ?? []) as unknown as ClosedRow[]);
+        setTotalCount(countRes.count ?? list.data?.length ?? 0);
         setState(
-          (totalCount.count ?? recent.length) > 0 || recent.length > 0
+          (countRes.count ?? 0) > 0 || (list.data?.length ?? 0) > 0
             ? "idle"
             : "empty",
         );
@@ -169,12 +170,12 @@ export default function DashboardScreen() {
   );
 
   const handleAddTrade = useCallback(() => {
-    if (!isPremium && stats && stats.totalTrades >= FREE_TRADE_LIMIT) {
+    if (!isPremium && totalCount >= FREE_TRADE_LIMIT) {
       router.push("/paywall");
       return;
     }
     router.push("/trade/new");
-  }, [isPremium, stats, router]);
+  }, [isPremium, totalCount, router]);
 
   const handleAddExchange = useCallback(() => {
     if (!isPremium) {
@@ -187,14 +188,137 @@ export default function DashboardScreen() {
   const handlePremiumPress = useCallback(() => {
     if (isPremium) return;
     router.push("/paywall");
-  }, [isPremium, router]);
+  }, [isPremium]);
+
+  // ── Фильтр по биржам (чипы «БИРЖИ В PNL», как на вебе) ───────────────────
+
+  const exchanges = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of trades) set.add(t.exchange);
+    for (const t of closed) set.add(t.exchange);
+    return Array.from(set).sort();
+  }, [trades, closed]);
+
+  const filteredClosed = useMemo(
+    () =>
+      exchangeFilter === "all"
+        ? closed
+        : closed.filter((t) => t.exchange === exchangeFilter),
+    [closed, exchangeFilter],
+  );
+
+  const filteredRecent = useMemo(
+    () =>
+      exchangeFilter === "all"
+        ? trades
+        : trades.filter((t) => t.exchange === exchangeFilter),
+    [trades, exchangeFilter],
+  );
+
+  // ── Агрегаты: всё время + текущий месяц (сетка статистики 3×3) ───────────
+
+  const now = useMemo(() => new Date(), []);
+  const curMonthKey = monthKey(now);
+  /** Месяц в сетке статистики: выбранный на графике или текущий. */
+  const activeMonthKey = selectedMonth ?? curMonthKey;
+
+  const allTime = useMemo(() => {
+    let net = 0;
+    let grossProfit = 0;
+    let grossLoss = 0;
+    let fees = 0;
+    let funding = 0;
+    for (const t of filteredClosed) {
+      const pnl = tradeNetPnl(t);
+      net += pnl;
+      if (pnl >= 0) grossProfit += pnl;
+      else grossLoss += pnl;
+      fees += t.fee;
+      funding += t.funding;
+    }
+    return {
+      net,
+      grossProfit,
+      grossLoss,
+      fees,
+      funding,
+      winRate: calculateWinRate(filteredClosed),
+      count:
+        exchangeFilter === "all" ? totalCount : filteredClosed.length,
+    };
+  }, [filteredClosed, totalCount, exchangeFilter]);
+
+  const month = useMemo(() => {
+    let net = 0;
+    let grossProfit = 0;
+    let grossLoss = 0;
+    let count = 0;
+    let wins = 0;
+    for (const t of filteredClosed) {
+      if (t.closed_at == null) continue;
+      const d = new Date(t.closed_at);
+      if (monthKey(d) !== activeMonthKey) continue;
+      const pnl = tradeNetPnl(t);
+      net += pnl;
+      if (pnl >= 0) {
+        grossProfit += pnl;
+        wins += 1;
+      } else {
+        grossLoss += pnl;
+      }
+      count += 1;
+    }
+    return {
+      net,
+      grossProfit,
+      grossLoss,
+      count,
+      winRate: count > 0 ? (wins / count) * 100 : 0,
+    };
+  }, [filteredClosed, activeMonthKey]);
+
+  // ── Ряд для бар-чарта «PnL по месяцам» (последние 6 месяцев) ─────────────
+
+  const monthly = useMemo(() => {
+    const byMonth = new Map<string, number>();
+    for (const t of filteredClosed) {
+      if (t.closed_at == null) continue;
+      const d = new Date(t.closed_at);
+      byMonth.set(monthKey(d), (byMonth.get(monthKey(d)) ?? 0) + tradeNetPnl(t));
+    }
+    const series: Array<{ key: string; label: string; value: number; isCurrent: boolean }> = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = monthKey(d);
+      series.push({
+        key,
+        label: MONTH_LABELS[d.getMonth()],
+        value: byMonth.get(key) ?? 0,
+        isCurrent: key === curMonthKey,
+      });
+    }
+    return series;
+  }, [filteredClosed, now, curMonthKey]);
+
+  const maxAbsMonthly = useMemo(
+    () => Math.max(1, ...monthly.map((m) => Math.abs(m.value))),
+    [monthly],
+  );
+
+  const selectedBar = useMemo(
+    () => monthly.find((m) => m.key === selectedMonth) ?? null,
+    [monthly, selectedMonth],
+  );
+
+  const chartSubtitle = selectedBar
+    ? `${selectedBar.label}: ${fmtPnl(selectedBar.value)}`
+    : `${allTime.count} ${plural(allTime.count, "сделка", "сделки", "сделок")} · ${monthly.filter((m) => m.value !== 0).length || 1} мес.`;
 
   const pnlColor = useMemo(() => {
-    if (!stats) return colors.textMuted;
-    if (stats.totalPnl > 0) return colors.profit;
-    if (stats.totalPnl < 0) return colors.loss;
+    if (allTime.net > 0) return colors.profit;
+    if (allTime.net < 0) return colors.loss;
     return colors.textMuted;
-  }, [stats]);
+  }, [allTime.net]);
 
   const premiumBadgeText = useMemo(() => {
     if (subLoading) return "…";
@@ -204,27 +328,20 @@ export default function DashboardScreen() {
     return "PREMIUM";
   }, [isPremium, entitlement, subLoading]);
 
-  const greetingName = useMemo(() => {
-    if (!user) return "";
-    const meta = user.user_metadata ?? {};
-    const fullName: string = meta.full_name || meta.name || "";
-    if (fullName) return fullName.split(" ")[0];
-    if (user.email) return user.email.split("@")[0];
-    return "";
-  }, [user]);
+  const monthTitle = activeMonthKey;
 
-  if (state === "loading" && !stats) {
+  if (state === "loading" && !trades.length && totalCount === 0) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, { paddingTop: insets.top + 24 }]}>
         <ActivityIndicator size="large" color={colors.accent} />
         <Text style={styles.muted}>Загрузка дашборда…</Text>
       </View>
     );
   }
 
-  if (state === "error" && !stats) {
+  if (state === "error" && !trades.length) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, { paddingTop: insets.top + 24 }]}>
         <Text style={styles.errorTitle}>Не удалось загрузить</Text>
         <Text style={styles.muted}>{errorMsg}</Text>
         <Pressable style={styles.retryButton} onPress={() => loadDashboard()}>
@@ -237,7 +354,7 @@ export default function DashboardScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
       refreshControl={
         <RefreshControl
           refreshing={state === "refreshing"}
@@ -247,21 +364,12 @@ export default function DashboardScreen() {
         />
       }
     >
+      {/* Шапка: бренд + статус подписки (как заголовок сайта) */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          {greetingName ? (
-            <>
-              <Text style={styles.greeting}>Привет,</Text>
-              <Text style={styles.userName} numberOfLines={1}>
-                {greetingName}
-              </Text>
-            </>
-          ) : (
-            <Text style={styles.userName} numberOfLines={1}>
-              {user?.email ?? ""}
-            </Text>
-          )}
-        </View>
+        <Text style={styles.brand} numberOfLines={1}>
+          FUTURES_
+          <Text style={{ color: colors.accent }}>TRACKER</Text>
+        </Text>
         <View style={[styles.badge, isPremium && styles.badgePremium]}>
           <Text style={[styles.badgeText, isPremium && styles.badgeTextPremium]}>
             {premiumBadgeText}
@@ -285,85 +393,271 @@ export default function DashboardScreen() {
         </Pressable>
       )}
 
-      {stats && (
-        <View style={styles.pnlCard}>
-          <Text style={styles.pnlLabel}>ОБЩИЙ P&L</Text>
-          <Text style={[styles.pnlValue, { color: pnlColor }]}>
-            {stats.totalPnl >= 0 ? "+" : ""}
-            {stats.totalPnl.toFixed(2)} USDT
-          </Text>
-          <View style={styles.pnlMeta}>
-            <View style={styles.pnlMetaItem}>
-              <Text style={styles.pnlMetaLabel}>AVG / TRADE</Text>
-              <Text style={[styles.pnlMetaValue, { color: pnlColor }]}>
-                {stats.avgPnlPerTrade >= 0 ? "+" : ""}
-                {stats.avgPnlPerTrade.toFixed(2)} USDT
-              </Text>
-            </View>
-            <View style={styles.pnlMetaDivider} />
-            <View style={styles.pnlMetaItem}>
-              <Text style={styles.pnlMetaLabel}>Сегодня</Text>
+      {/* Hero: итог по сделкам (кнопка «Синхрон.» — как на вебе) */}
+      <View style={styles.heroCard}>
+        <View style={styles.heroHeader}>
+          <Text style={styles.heroLabel}>ИТОГ ПО СДЕЛКАМ</Text>
+          <Pressable
+            style={styles.syncButton}
+            onPress={() => loadDashboard(true)}
+            disabled={state === "refreshing"}
+            accessibilityRole="button"
+            accessibilityLabel="Синхронизировать"
+          >
+            <Ionicons name="refresh" size={14} color="#fff" />
+            <Text style={styles.syncText}>Синхрон.</Text>
+          </Pressable>
+        </View>
+        <Text style={[styles.heroValue, { color: pnlColor }]}>
+          {fmtPnl(allTime.net)}
+          <Text style={styles.heroSuffix}> USDT</Text>
+        </Text>
+        <Text style={styles.heroSub}>
+          {exchangeFilter === "all"
+            ? `Все биржи · ${allTime.count} ${plural(allTime.count, "сделка", "сделки", "сделок")}`
+            : `${exchangeLabel(exchangeFilter)} · ${allTime.count} ${plural(allTime.count, "сделка", "сделки", "сделок")}`}
+        </Text>
+      </View>
+
+      {/* Чипы фильтра бирж */}
+      {exchanges.length > 1 && (
+        <View style={styles.chipsBlock}>
+          <Text style={styles.chipsLabel}>БИРЖИ В PNL</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipsRow}
+          >
+            <Pressable
+              style={[
+                styles.chip,
+                exchangeFilter === "all" && styles.chipActive,
+              ]}
+              onPress={() => setExchangeFilter("all")}
+            >
+              {exchangeFilter === "all" && (
+                <Ionicons name="checkmark" size={13} color={colors.accent} />
+              )}
               <Text
                 style={[
-                  styles.pnlMetaValue,
-                  { color: stats.todayPnl >= 0 ? colors.profit : colors.loss },
+                  styles.chipText,
+                  exchangeFilter === "all" && styles.chipTextActive,
                 ]}
               >
-                {stats.todayPnl >= 0 ? "+" : ""}
-                {stats.todayPnl.toFixed(2)}
+                Все
+              </Text>
+            </Pressable>
+            {exchanges.map((ex) => (
+              <Pressable
+                key={ex}
+                style={[
+                  styles.chip,
+                  exchangeFilter === ex && styles.chipActive,
+                ]}
+                onPress={() => setExchangeFilter(ex)}
+              >
+                {exchangeFilter === ex && (
+                  <Ionicons name="checkmark" size={13} color={colors.accent} />
+                )}
+                <Text
+                  style={[
+                    styles.chipText,
+                    exchangeFilter === ex && styles.chipTextActive,
+                  ]}
+                >
+                  {exchangeLabel(ex)}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Сетка статистики 3×3 (месяц + всё время, как на вебе) */}
+      <View style={styles.gridSection}>
+        <View style={styles.gridHeaderRow}>
+          <Text style={styles.gridHeaderTitle}>СТАТИСТИКА {monthTitle}</Text>
+          {selectedMonth && (
+            <Pressable onPress={() => setSelectedMonth(null)}>
+              <Text style={styles.gridHeaderLink}>Сбросить месяц</Text>
+            </Pressable>
+          )}
+        </View>
+        <View style={styles.grid}>
+          <View style={styles.gridRow}>
+            <View style={styles.cell}>
+              <Text style={styles.cellLabel}>СДЕЛОК</Text>
+              <Text style={styles.cellValue}>{month.count}</Text>
+            </View>
+            <View style={styles.cell}>
+              <Text style={styles.cellLabel}>ПРИБЫЛЬ / УБЫТОК</Text>
+              <Text style={[styles.cellValueSmall, { color: colors.profit }]}>
+                +{fmt(month.grossProfit)}
+              </Text>
+              <Text style={[styles.cellValueSmall, { color: colors.loss }]}>
+                −{fmt(Math.abs(month.grossLoss))}
+              </Text>
+            </View>
+            <View style={styles.cell}>
+              <Text style={styles.cellLabel}>WIN-RATE</Text>
+              <Text style={styles.cellValue}>{month.winRate.toFixed(1)}%</Text>
+            </View>
+          </View>
+
+          <View style={styles.gridRow}>
+            <View style={styles.cell}>
+              <Text style={styles.cellLabel}>ИТОГ МЕСЯЦА</Text>
+              <Text
+                style={[
+                  styles.cellValue,
+                  {
+                    color:
+                      month.net > 0
+                        ? colors.profit
+                        : month.net < 0
+                          ? colors.loss
+                          : colors.textMuted,
+                  },
+                ]}
+              >
+                {fmtPnl(month.net)}
+              </Text>
+            </View>
+            <View style={styles.cell}>
+              <Text style={styles.cellLabel}>ОБЩАЯ ПРИБЫЛЬ</Text>
+              <Text style={[styles.cellValue, { color: colors.profit }]}>
+                +{fmt(allTime.grossProfit)}
+              </Text>
+            </View>
+            <View style={styles.cell}>
+              <Text style={styles.cellLabel}>ОБЩИЙ УБЫТОК</Text>
+              <Text style={[styles.cellValue, { color: colors.loss }]}>
+                −{fmt(Math.abs(allTime.grossLoss))}
               </Text>
             </View>
           </View>
-        </View>
-      )}
 
-      {stats && (
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statCardLabel}>WIN RATE</Text>
-            <Text style={styles.statCardValue}>
-              {stats.winRate.toFixed(1)}%
-            </Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statCardLabel}>СДЕЛОК</Text>
-            <Text style={styles.statCardValue}>{stats.totalTrades}</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statCardLabel}>АКТИВНЫХ</Text>
-            <Text style={styles.statCardValue}>{stats.activeTrades}</Text>
+          <View style={styles.gridRow}>
+            <View style={styles.cell}>
+              <Text style={styles.cellLabel}>КОМИССИИ</Text>
+              <Text style={[styles.cellValue, { color: colors.loss }]}>
+                −{fmt(allTime.fees)}
+              </Text>
+            </View>
+            <View style={styles.cell}>
+              <Text style={styles.cellLabel}>ФАНДИНГ</Text>
+              <Text
+                style={[
+                  styles.cellValue,
+                  {
+                    color:
+                      allTime.funding > 0
+                        ? colors.profit
+                        : allTime.funding < 0
+                          ? colors.loss
+                          : colors.textMuted,
+                  },
+                ]}
+              >
+                {fmtPnl(allTime.funding)}
+              </Text>
+            </View>
+            <View style={styles.cell}>
+              <Text style={styles.cellLabel}>WIN-RATE ЗА ВСЁ ВРЕМЯ</Text>
+              <Text style={styles.cellValue}>{allTime.winRate.toFixed(1)}%</Text>
+            </View>
           </View>
         </View>
-      )}
+      </View>
 
+      {/* Бар-чарт PnL по месяцам */}
+      <View style={styles.chartCard}>
+        <View style={styles.chartHeader}>
+          <Text style={styles.chartTitle}>PNL ПО МЕСЯЦАМ</Text>
+          <Text style={styles.chartSubtitle} numberOfLines={1}>
+            {chartSubtitle}
+          </Text>
+        </View>
+        <View style={styles.chartBars}>
+          {monthly.map((m) => {
+            // 88% — запас под подпись месяца, чтобы столбец 100% не вылезал
+            const h = Math.max(3, (Math.abs(m.value) / maxAbsMonthly) * 88);
+            // Палитра веба: исторические месяцы — teal, текущий — cyan;
+            // убыточные месяцы остаются красными (семантика важнее копии).
+            const barColor =
+              m.value === 0
+                ? colors.border
+                : m.value < 0
+                  ? colors.loss
+                  : m.isCurrent
+                    ? colors.chartCurrent
+                    : colors.chartTeal;
+            return (
+              <Pressable
+                key={m.key}
+                style={styles.chartBarWrap}
+                onPress={() =>
+                  setSelectedMonth(selectedMonth === m.key ? null : m.key)
+                }
+              >
+                <View
+                  style={[
+                    styles.chartBar,
+                    {
+                      height: `${m.value === 0 ? 3 : h}%`,
+                      backgroundColor: barColor,
+                    },
+                    selectedMonth === m.key && styles.chartBarSelected,
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.chartBarLabel,
+                    m.isCurrent && { color: colors.textMuted },
+                  ]}
+                >
+                  {m.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* Кнопки действий */}
       <View style={styles.actionsRow}>
         <Pressable
           style={[styles.actionButton, styles.actionButtonPrimary]}
           onPress={handleAddTrade}
         >
-          <Text style={styles.actionButtonIcon}>+</Text>
+          <Ionicons name="add" size={18} color="#fff" />
           <Text style={styles.actionButtonTextDark}>Сделка</Text>
         </Pressable>
         <Pressable
           style={[styles.actionButton, !isPremium && styles.actionButtonLocked]}
           onPress={handleAddExchange}
         >
-          <Text style={styles.actionButtonIcon}>{isPremium ? "↻" : "🔒"}</Text>
+          <Ionicons
+            name={isPremium ? "sync" : "lock-closed"}
+            size={18}
+            color={colors.text}
+          />
           <Text style={styles.actionButtonText}>Биржа</Text>
         </Pressable>
       </View>
 
+      {/* Последние сделки */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Последние сделки</Text>
-          {trades.length > 0 && (
+          <Text style={styles.sectionTitle}>ПОСЛЕДНИЕ СДЕЛКИ</Text>
+          {filteredRecent.length > 0 && (
             <Pressable onPress={() => router.push("/(tabs)/trades")}>
-              <Text style={styles.sectionLink}>Все →</Text>
+              <Text style={styles.sectionLink}>Все сделки →</Text>
             </Pressable>
           )}
         </View>
 
-        {trades.length === 0 ? (
+        {filteredRecent.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateTitle}>Пока нет сделок</Text>
             <Text style={styles.emptyStateDesc}>
@@ -371,32 +665,43 @@ export default function DashboardScreen() {
             </Text>
           </View>
         ) : (
-          <View style={styles.tradesList}>
-            {trades.slice(0, 5).map((trade) => {
+          <View style={styles.tradesPanel}>
+            {filteredRecent.slice(0, 6).map((trade, i, arr) => {
               const isLong = trade.side === "long";
               const net = tradeNetPnl(trade);
               const isPositive = net >= 0;
               const isOpen = trade.closed_at == null;
-              const rowPnlColor = isPositive ? colors.profit : colors.loss;
               return (
-                <View key={trade.id} style={styles.tradeRow}>
+                <View
+                  key={trade.id}
+                  style={[
+                    styles.tradeRow,
+                    i < arr.length - 1 && styles.tradeRowBorder,
+                  ]}
+                >
                   <View
                     style={[
-                      styles.tradeSideIndicator,
+                      styles.tradeSideBadge,
                       isLong ? styles.tradeSideLong : styles.tradeSideShort,
                     ]}
-                  />
+                  >
+                    <Text
+                      style={[
+                        styles.tradeSideText,
+                        isLong ? styles.tradeSideTextLong : styles.tradeSideTextShort,
+                      ]}
+                    >
+                      {isLong ? "LONG" : "SHORT"}
+                    </Text>
+                  </View>
                   <View style={styles.tradeInfo}>
                     <View style={styles.tradeSymbolRow}>
-                      <Text style={styles.tradeSymbol}>{trade.symbol}</Text>
-                      <View
-                        style={[
-                          styles.tradeSideBadge,
-                          isLong ? styles.tradeSideLong : styles.tradeSideShort,
-                        ]}
-                      >
-                        <Text style={styles.tradeSideText}>
-                          {isLong ? "LONG" : "SHORT"}
+                      <Text style={styles.tradeSymbol} numberOfLines={1}>
+                        {trade.symbol}
+                      </Text>
+                      <View style={styles.tradeExchangeTag}>
+                        <Text style={styles.tradeExchangeText}>
+                          {EXCHANGE_LABELS[trade.exchange] ?? trade.exchange}
                         </Text>
                       </View>
                       {isOpen && (
@@ -406,18 +711,19 @@ export default function DashboardScreen() {
                       )}
                     </View>
                     <Text style={styles.tradeMeta}>
-                      {EXCHANGE_LABELS[trade.exchange] ?? trade.exchange} ·{" "}
                       {isOpen
                         ? "открыта"
-                        : new Date(trade.closed_at!).toLocaleDateString("ru-RU")}
+                        : fmtDate(trade.closed_at)}
                     </Text>
                   </View>
-                  <View style={styles.tradePnl}>
-                    <Text style={[styles.tradePnlValue, { color: rowPnlColor }]}>
-                      {isPositive ? "+" : ""}
-                      {net.toFixed(2)}
-                    </Text>
-                  </View>
+                  <Text
+                    style={[
+                      styles.tradePnlValue,
+                      { color: isPositive ? colors.profit : colors.loss },
+                    ]}
+                  >
+                    {fmtPnl(net)}
+                  </Text>
                 </View>
               );
             })}
@@ -426,6 +732,20 @@ export default function DashboardScreen() {
       </View>
     </ScrollView>
   );
+}
+
+/** Русская плюрализация: 1 сделка / 2 сделки / 5 сделок. */
+function plural(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
+  return many;
+}
+
+/** Безопасная метка биржи для строковых ключей (фильтр-чипы). */
+function exchangeLabel(ex: string): string {
+  return (EXCHANGE_LABELS as Record<string, string>)[ex] ?? ex;
 }
 
 const styles = StyleSheet.create({
@@ -455,34 +775,37 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12,
   },
-  headerLeft: { flex: 1, gap: 2 },
-  greeting: {
-    fontSize: 12,
-    color: colors.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: 1,
+  brand: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: colors.text,
+    letterSpacing: 1.2,
   },
-  userName: { fontSize: 18, fontWeight: "600", color: colors.text },
   badge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 6,
     backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  badgePremium: { backgroundColor: colors.accent },
+  badgePremium: {
+    backgroundColor: colors.accentDim,
+    borderColor: colors.accent,
+  },
   badgeText: {
     fontSize: 10,
     fontWeight: "700",
     color: colors.textMuted,
     letterSpacing: 1,
   },
-  badgeTextPremium: { color: "#fff" },
+  badgeTextPremium: { color: colors.accent },
   premiumCard: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.accent,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 8,
+    padding: 14,
     gap: 12,
   },
   premiumCardContent: { flex: 1, gap: 4 },
@@ -494,52 +817,163 @@ const styles = StyleSheet.create({
     lineHeight: 15,
   },
   premiumCardArrow: { fontSize: 20, color: "#fff", fontWeight: "700" },
-  pnlCard: {
+  heroCard: {
     backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: 20,
-    gap: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    gap: 6,
   },
-  pnlLabel: {
-    fontSize: 11,
+  heroLabel: {
+    fontSize: 10,
     color: colors.textMuted,
     letterSpacing: 1.5,
-    fontWeight: "600",
+    fontWeight: "700",
   },
-  pnlValue: { fontSize: 36, fontWeight: "700", letterSpacing: -0.5 },
-  pnlMeta: {
+  heroHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 16,
-    marginTop: 4,
+    justifyContent: "space-between",
+    gap: 8,
   },
-  pnlMetaItem: { gap: 2 },
-  pnlMetaLabel: {
+  syncButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.accent,
+    borderRadius: 999,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+  },
+  syncText: { fontSize: 12, color: "#fff", fontWeight: "600" },
+  heroValue: {
+    fontSize: 32,
+    fontWeight: "700",
+    letterSpacing: -0.5,
+    fontVariant: ["tabular-nums"],
+  },
+  heroSuffix: { fontSize: 14, fontWeight: "600", color: colors.textMuted },
+  heroSub: { fontSize: 12, color: colors.textMuted },
+  chipsBlock: { gap: 8 },
+  chipsLabel: {
     fontSize: 10,
     color: colors.textFaint,
-    letterSpacing: 1,
+    letterSpacing: 1.2,
+    fontWeight: "700",
   },
-  pnlMetaValue: { fontSize: 14, fontWeight: "600" },
-  pnlMetaDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: colors.textFaint + "40",
+  chipsRow: { flexDirection: "row", gap: 6, paddingRight: 8 },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: colors.surfaceHover,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  statsRow: { flexDirection: "row", gap: 8 },
-  statCard: {
+  chipActive: {
+    backgroundColor: colors.accentDim,
+    borderColor: colors.accent,
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.textMuted,
+  },
+  chipTextActive: { color: colors.accent },
+  gridSection: { gap: 8 },
+  gridHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  gridHeaderLink: { fontSize: 12, color: colors.accent, fontWeight: "600" },
+  gridHeaderTitle: {
+    fontSize: 10,
+    color: colors.textFaint,
+    letterSpacing: 1.2,
+    fontWeight: "700",
+  },
+  grid: { gap: 6 },
+  gridRow: { flexDirection: "row", gap: 6 },
+  cell: {
     flex: 1,
     backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
     gap: 4,
+    minHeight: 56,
   },
-  statCardLabel: {
+  cellLabel: {
     fontSize: 10,
     color: colors.textFaint,
-    letterSpacing: 1,
-    fontWeight: "600",
+    letterSpacing: 0.8,
+    fontWeight: "700",
   },
-  statCardValue: { fontSize: 18, fontWeight: "700", color: colors.text },
+  cellValue: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.text,
+    fontVariant: ["tabular-nums"],
+  },
+  cellValueSmall: {
+    fontSize: 13,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+  },
+  chartCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    gap: 12,
+  },
+  chartHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  chartTitle: {
+    fontSize: 10,
+    color: colors.textMuted,
+    letterSpacing: 1.5,
+    fontWeight: "700",
+  },
+  chartSubtitle: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontVariant: ["tabular-nums"],
+    flexShrink: 1,
+  },
+  chartBars: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+    height: 110,
+  },
+  chartBarWrap: { flex: 1, gap: 6, height: "100%" },
+  chartBar: {
+    width: "100%",
+    borderRadius: 2,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
+  },
+  chartBarSelected: { opacity: 0.75 },
+  chartBarLabel: {
+    fontSize: 9,
+    color: colors.textFaint,
+    fontWeight: "600",
+    textAlign: "center",
+  },
   actionsRow: { flexDirection: "row", gap: 8 },
   actionButton: {
     flex: 1,
@@ -547,72 +981,104 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: 12,
+    borderRadius: 8,
     backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  actionButtonPrimary: { backgroundColor: colors.accent },
-  actionButtonLocked: { backgroundColor: colors.surface, opacity: 0.7 },
-  actionButtonIcon: {
-    fontSize: 16,
-    color: colors.text,
-    fontWeight: "700",
+  actionButtonPrimary: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
+  actionButtonLocked: { opacity: 0.7 },
   actionButtonText: { fontSize: 14, fontWeight: "600", color: colors.text },
   actionButtonTextDark: { fontSize: 14, fontWeight: "600", color: "#fff" },
-  section: { gap: 12 },
+  section: { gap: 8 },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  sectionTitle: { fontSize: 16, fontWeight: "600", color: colors.text },
-  sectionLink: { fontSize: 13, color: colors.accent, fontWeight: "500" },
-  tradesList: { gap: 8 },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.textMuted,
+    letterSpacing: 1.2,
+  },
+  sectionLink: { fontSize: 12, color: colors.accent, fontWeight: "600" },
+  tradesPanel: {
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: "hidden",
+  },
   tradeRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: 14,
-    gap: 12,
-    overflow: "hidden",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
   },
-  tradeSideIndicator: { width: 3, height: 36, borderRadius: 2 },
-  tradeSideLong: { backgroundColor: colors.profit },
-  tradeSideShort: { backgroundColor: colors.loss },
-  tradeInfo: { flex: 1, gap: 4 },
+  tradeRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
+  tradeSideBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  tradeSideLong: { backgroundColor: colors.profitDim },
+  tradeSideShort: { backgroundColor: colors.lossDim },
+  tradeSideText: {
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  tradeSideTextLong: { color: colors.profit },
+  tradeSideTextShort: { color: colors.loss },
+  tradeInfo: { flex: 1, gap: 3 },
   tradeSymbolRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
   tradeSymbol: { fontSize: 14, fontWeight: "600", color: colors.text },
-  tradeSideBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
-  tradeSideText: {
+  tradeExchangeTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    backgroundColor: colors.surfaceHover,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  tradeExchangeText: {
     fontSize: 9,
-    fontWeight: "700",
-    color: "#fff",
-    letterSpacing: 0.5,
+    fontWeight: "600",
+    color: colors.textMuted,
   },
   tradeOpenBadge: {
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 4,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.accentDim,
   },
   tradeOpenText: {
     fontSize: 9,
     fontWeight: "700",
-    color: "#fff",
+    color: colors.accent,
     letterSpacing: 0.5,
   },
-  tradeMeta: { fontSize: 11, color: colors.textMuted },
-  tradePnl: { alignItems: "flex-end", gap: 2 },
-  tradePnlValue: { fontSize: 14, fontWeight: "700" },
+  tradeMeta: { fontSize: 11, color: colors.textFaint },
+  tradePnlValue: {
+    fontSize: 14,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+  },
   emptyState: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
     padding: 24,
     alignItems: "center",
     gap: 8,

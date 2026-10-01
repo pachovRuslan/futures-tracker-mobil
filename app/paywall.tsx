@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/context/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { colors } from "@/theme/colors";
@@ -13,10 +14,22 @@ import {
 } from "react-native";
 
 /** Только реально существующие возможности Premium (см. REFACTORING.md). */
-const FEATURES = [
-  { icon: "↻", title: "Авто-синк бирж", desc: "Подключите API-ключи — Binance, Bybit, Bitget, MEXC, BingX подтянут сделки сами" },
-  { icon: "∞", title: "Безлимит сделок", desc: "FREE — до 50 сделок, Premium — без ограничений" },
-] as const;
+const FEATURES: Array<{
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  desc: string;
+}> = [
+  {
+    icon: "sync",
+    title: "Авто-синк бирж",
+    desc: "Подключите API-ключи — Binance, Bybit, Bitget, MEXC, BingX подтянут сделки сами",
+  },
+  {
+    icon: "infinite",
+    title: "Безлимит сделок",
+    desc: "FREE — до 50 сделок, Premium — без ограничений",
+  },
+];
 
 export default function PaywallScreen() {
   const router = useRouter();
@@ -65,7 +78,7 @@ export default function PaywallScreen() {
           {FEATURES.map((f) => (
             <View key={f.title} style={styles.featureRow}>
               <View style={styles.featureIcon}>
-                <Text style={styles.featureIconText}>{f.icon}</Text>
+                <Ionicons name={f.icon} size={20} color={colors.accent} />
               </View>
               <View style={styles.featureContent}>
                 <Text style={styles.featureTitle}>{f.title}</Text>
@@ -142,11 +155,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     flexShrink: 0,
-  },
-  featureIconText: {
-    fontSize: 18,
-    color: colors.accent,
-    fontWeight: "700",
   },
   featureContent: { flex: 1, gap: 2 },
   featureTitle: {

@@ -18,25 +18,35 @@ export default function TradesScreen() {
   const renderItem = useCallback(
     ({ item: t }: { item: TradeRow }) => {
       const net = tradeNetPnl(t);
+      const isLong = t.side === "long";
       return (
         <View style={styles.row}>
           <View style={styles.left}>
             <View
               style={[
                 styles.badge,
-                t.side === "long" ? styles.longBadge : styles.shortBadge,
+                isLong ? styles.longBadge : styles.shortBadge,
               ]}
             >
-              <Text style={styles.badgeText}>
-                {t.side === "long" ? "LONG" : "SHORT"}
+              <Text
+                style={[
+                  styles.badgeText,
+                  isLong ? styles.longBadgeText : styles.shortBadgeText,
+                ]}
+              >
+                {isLong ? "LONG" : "SHORT"}
               </Text>
             </View>
-            <View>
-              <Text style={styles.symbol}>{t.symbol}</Text>
-              <Text style={styles.exchange}>
-                {EXCHANGE_LABELS[t.exchange] ?? t.exchange} ·{" "}
-                {fmtDate(t.closed_at)}
-              </Text>
+            <View style={styles.leftText}>
+              <View style={styles.symbolRow}>
+                <Text style={styles.symbol}>{t.symbol}</Text>
+                <View style={styles.exchangeTag}>
+                  <Text style={styles.exchangeTagText}>
+                    {EXCHANGE_LABELS[t.exchange] ?? t.exchange}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.exchange}>{fmtDate(t.closed_at)}</Text>
             </View>
           </View>
           <Text
@@ -124,12 +134,33 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   left: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
-  badge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  leftText: { gap: 3 },
+  symbolRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  badge: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4 },
   longBadge: { backgroundColor: colors.profitDim },
   shortBadge: { backgroundColor: colors.lossDim },
-  badgeText: { fontSize: 9, fontWeight: "600", color: colors.text },
-  symbol: { fontSize: 14, fontWeight: "500", color: colors.text },
+  badgeText: { fontSize: 9, fontWeight: "700", letterSpacing: 0.5 },
+  longBadgeText: { color: colors.profit },
+  shortBadgeText: { color: colors.loss },
+  symbol: { fontSize: 14, fontWeight: "600", color: colors.text },
+  exchangeTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    backgroundColor: colors.surfaceHover,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  exchangeTagText: {
+    fontSize: 9,
+    fontWeight: "600",
+    color: colors.textMuted,
+  },
   exchange: { fontSize: 10, color: colors.textFaint, marginTop: 2 },
-  pnl: { fontSize: 14, fontWeight: "600" },
+  pnl: {
+    fontSize: 14,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+  },
   empty: { color: colors.textFaint, textAlign: "center", padding: 40 },
 });

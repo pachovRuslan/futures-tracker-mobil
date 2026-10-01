@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useSubscription } from "@/hooks/useSubscription";
 import { api } from "@/services/api";
 import type { ApiExchange, Connection } from "@/shared/types";
@@ -15,9 +16,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function ConnectionsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { isPremium } = useSubscription();
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,7 +109,10 @@ export default function ConnectionsScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
+    >
       <Text style={styles.title}>Подключения</Text>
       {error && (
         <View style={styles.errorBox}>
@@ -123,7 +129,10 @@ export default function ConnectionsScreen() {
             <View>
               <Text style={styles.exchangeName}>{EXCHANGE_LABELS[ex]}</Text>
               {conn ? (
-                <Text style={styles.connected}>✓ {conn.key_preview}</Text>
+                <View style={styles.connectedRow}>
+                  <Ionicons name="checkmark" size={12} color={colors.profit} />
+                  <Text style={styles.connected}>{conn.key_preview}</Text>
+                </View>
               ) : (
                 <Text style={styles.notConnected}>не подключено</Text>
               )}
@@ -243,7 +252,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   exchangeName: { fontSize: 14, color: colors.text, fontWeight: "500" },
-  connected: { fontSize: 11, color: colors.profit, marginTop: 4 },
+  connectedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    marginTop: 4,
+  },
+  connected: { fontSize: 11, color: colors.profit },
   notConnected: { fontSize: 11, color: colors.textFaint, marginTop: 4 },
   disconnect: { fontSize: 12, color: colors.loss },
   form: { gap: 14 },
