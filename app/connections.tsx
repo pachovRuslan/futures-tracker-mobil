@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 export default function ConnectionsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isPremium } = useSubscription();
+  const { isPremium, loading: entitlementLoading } = useSubscription();
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,11 +35,18 @@ export default function ConnectionsScreen() {
   // «Подключения бирж» в настройках вёл сюда без проверки premium —
   // FREE-пользователь получал доступ к premium-функции через второй вход.
   // Экранная проверка защищает и прямой deep link.
+  //
+  // ⚠️ Гейт ЖДЁТ загрузки entitlement: useSubscription стартует с
+  // isPremium=false, и без проверки loading'а PREMIUM-юзера отбрасывало
+  // на пейволл ещё до загрузки статуса. Пейволл видел «Premium активен»
+  // и автоперенаправлял обратно — получался «отскок» пейволл→дашборд
+  // без единого действия со стороны пользователя.
   useEffect(() => {
+    if (entitlementLoading) return;
     if (!isPremium) {
       router.replace("/paywall");
     }
-  }, [isPremium, router]);
+  }, [entitlementLoading, isPremium, router]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,11 +65,16 @@ export default function ConnectionsScreen() {
 
   useEffect(() => {
     mountedRef.current = true;
-    load();
+    // Не дёргаем бэкенд, пока premium не подтверждён: гейт может увести
+    // экран на пейволл — останется висящий запрос и ошибка на уже
+    // размонтированном экране.
+    if (!entitlementLoading && isPremium) {
+      load();
+    }
     return () => {
       mountedRef.current = false;
     };
-  }, [load]);
+  }, [entitlementLoading, isPremium, load]);
 
   const submit = async () => {
     if (!apiKey || !apiSecret) return;

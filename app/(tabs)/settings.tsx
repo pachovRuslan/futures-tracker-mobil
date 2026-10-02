@@ -6,7 +6,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
-  const { isPremium } = useSubscription();
+  const { isPremium, loading: subLoading } = useSubscription();
   const router = useRouter();
 
   return (
@@ -34,7 +34,17 @@ export default function SettingsScreen() {
 
       <TouchableOpacity
         style={styles.menuItem}
-        onPress={() => router.push("/connections")}
+        onPress={() => {
+          // FREE — сразу пейволл, без мелькания экрана «Подключения»
+          // (экранный гейт при этом всё равно остаётся — он защищает и
+          // deep link). Пока статус ещё грузится, решение принимает гейт
+          // самого экрана, а не эта кнопка.
+          if (!subLoading && !isPremium) {
+            router.push("/paywall");
+          } else {
+            router.push("/connections");
+          }
+        }}
       >
         <Text style={styles.menuText}>Подключения бирж</Text>
         <Text style={styles.arrow}>→</Text>

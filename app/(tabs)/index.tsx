@@ -190,12 +190,17 @@ export default function DashboardScreen() {
   }, [isPremium, totalCount, router]);
 
   const handleAddExchange = useCallback(() => {
-    if (!isPremium) {
+    // На пейволл отправляем только когда УВЕРЕНЫ, что юзер FREE. Пока
+    // entitlement грузится, isPremium === false — без проверки loading'а
+    // премиум-юзера зря отбрасывало на пейволл, а тот его отфутболивал
+    // обратно («Premium активен, перенаправляем…»). Пока статус грузится —
+    // идём на экран: его гейт сам дождётся статуса и примет решение.
+    if (!subLoading && !isPremium) {
       router.push("/paywall");
       return;
     }
     router.push("/connections");
-  }, [isPremium, router]);
+  }, [subLoading, isPremium, router]);
 
   const handlePremiumPress = useCallback(() => {
     if (isPremium) return;
