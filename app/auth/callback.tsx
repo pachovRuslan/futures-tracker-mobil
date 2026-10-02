@@ -7,7 +7,7 @@ import {
 } from "@/services/auth";
 import { colors } from "@/theme/colors";
 import { useRouter } from "expo-router";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -35,6 +35,9 @@ import {
 export default function AuthCallback() {
   const router = useRouter();
   const isHandled = useRef(false);
+  // Обмен кода начат — таймауту запрещено выкидывать на /login (см. ниже).
+  const codeStarted = useRef(false);
+  const [slow, setSlow] = useState(false);
 
   useEffect(() => {
     let unsub: { unsubscribe: () => void } | null = null;
@@ -49,6 +52,7 @@ export default function AuthCallback() {
     };
 
     const handleCode = async (code: string) => {
+      codeStarted.current = true;
       try {
         const user = await exchangeCodeOnce(code);
         redirect(user ? "/" : "/login");
@@ -122,17 +126,49 @@ export default function AuthCallback() {
     });
     unsub = data.subscription;
 
-    // 6. Timeout fallback.
+    // 6. Timeout fallback: только если обмен кода ещё НЕ начался.
+    //
+    // История бага: раньше здесь стоял безусловный redirect через 5 секунд.
+    // На медленной сети/устройстве обмен кода занимает больше 5с
+    // (RTT до региона Supabase + серверный обмен с Google + шифрование
+    // SecureStore, где сессия ~4-6КБ пишется ~10 отдельными операциями
+    // Keystore). Экран уходил на /login, обмен завершался уже без него,
+    // сессия записывалась в хранилище, но UI узнавал о ней только после
+    // перезапуска приложения — «бесконечный логин». Если обмен начат —
+    // ждём (Android всё равно замораживает фоновый fetch, он доделается
+    // при возврате в приложение).
     const timer = setTimeout(async () => {
       if (isHandled.current) return;
+      if (codeStarted.current) {
+        setSlow(true);
+        return;
+      }
       const {
         data: { session },
       } = await getSupabase().auth.getSession();
       redirect(session ? "/" : "/login");
     }, 5000);
 
+    // 7. Жёсткий потолок: даже зависший сетевой запрос не должен держать
+    //    экран бесконечно. 60с ≈ 12× старого бюджета — за это время живой
+    //    обмен успеет точно.
+    const hardTimer = setTimeout(async () => {
+      if (isHandled.current) return;
+      const {
+        data: { session },
+      } = await getSupabase().auth.getSession();
+      if (!session) {
+        Alert.alert(
+          "Вход не завершён",
+          "Обмен ключами затянулся более чем на минуту. Попробуйте войти ещё раз.",
+        );
+      }
+      redirect(session ? "/" : "/login");
+    }, 60000);
+
     return () => {
       clearTimeout(timer);
+      clearTimeout(hardTimer);
       unsub?.unsubscribe();
       linkingSub?.remove();
     };
@@ -141,7 +177,11 @@ export default function AuthCallback() {
   return (
     <View style={styles.container}>
       <ActivityIndicator size="large" color={colors.accent} />
-      <Text style={styles.text}>Вход в систему...</Text>
+      <Text style={styles.text}>
+        {slow
+          ? "Завершаем вход — на медленной сети это может занять до минуты…"
+          : "Вход в систему..."}
+      </Text>
     </View>
   );
 }

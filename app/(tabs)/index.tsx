@@ -84,6 +84,18 @@ const MONTH_LABELS = [
 const monthKey = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 
+/** Минимум месяцев на графике — окно «последние 6» даже без данных. */
+const CHART_MIN_MONTHS = 6;
+/** Максимум месяцев: при большей истории график скроллится (как расширяющийся на сайте),
+ *  но не рисует сотни баров — сейчас кап 2 года. */
+const CHART_MAX_MONTHS = 24;
+/** Высота области баров, px (совпадает со стилями chartBars/chartScroll). */
+const CHART_HEIGHT_PX = 110;
+/** Запас под подпись месяца (gap + строка 9pt), px. */
+const CHART_LABEL_RESERVE_PX = 20;
+/** Ширина бара в режиме скролла (>6 месяцев), px. */
+const CHART_BAR_WIDTH_PX = 44;
+
 export default function DashboardScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -286,8 +298,26 @@ export default function DashboardScreen() {
       const d = new Date(t.closed_at);
       byMonth.set(monthKey(d), (byMonth.get(monthKey(d)) ?? 0) + tradeNetPnl(t));
     }
+
+    // Диапазон графика: от самого старого месяца с данными до текущего.
+    // Как на сайте — график «расширяется», когда истории больше полугода;
+    // при >CHART_MAX_MONTHS месяцев рисуем последнее окно (кап — чтобы не
+    // строить сотни баров). Минимум — окно в 6 месяцев, как было раньше.
+    let monthsBack = CHART_MIN_MONTHS - 1;
+    if (byMonth.size > 0) {
+      // Формат "YYYY-MM" сортируется лексикографически как дата.
+      const oldestKey = [...byMonth.keys()].sort()[0];
+      const [y, m] = oldestKey.split("-").map(Number);
+      const back =
+        (now.getFullYear() - y) * 12 + (now.getMonth() - (m - 1));
+      monthsBack = Math.min(
+        Math.max(back, CHART_MIN_MONTHS - 1),
+        CHART_MAX_MONTHS - 1,
+      );
+    }
+
     const series: Array<{ key: string; label: string; value: number; isCurrent: boolean }> = [];
-    for (let i = 5; i >= 0; i--) {
+    for (let i = monthsBack; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const key = monthKey(d);
       series.push({
@@ -299,6 +329,10 @@ export default function DashboardScreen() {
     }
     return series;
   }, [filteredClosed, now, curMonthKey]);
+
+  /** >6 месяцев — включаем горизонтальный скролл (график «расширяется»). */
+  const isWideChart = monthly.length > CHART_MIN_MONTHS;
+  const chartScrollRef = useRef<ScrollView>(null);
 
   const maxAbsMonthly = useMemo(
     () => Math.max(1, ...monthly.map((m) => Math.abs(m.value))),
@@ -329,6 +363,68 @@ export default function DashboardScreen() {
   }, [isPremium, entitlement, subLoading]);
 
   const monthTitle = activeMonthKey;
+
+  /**
+   * Отрисовка одного бара месячного графика (общая для обоих режимов).
+   *
+   * Высота бара — в пикселях, а не в %: при фиксированной высоте области
+   * (CHART_HEIGHT_PX) это ведёт себя одинаково и в обычном flex-режиме, и в
+   * горизонтальном скролле.
+   */
+  const renderChartBar = (m: {
+    key: string;
+    label: string;
+    value: number;
+    isCurrent: boolean;
+  }) => {
+    // Высота бара — от максимума по модулю; минус запас под подпись месяца.
+    const h = Math.max(
+      3,
+      (Math.abs(m.value) / maxAbsMonthly) *
+        (CHART_HEIGHT_PX - CHART_LABEL_RESERVE_PX),
+    );
+    // Палитра веба: исторические месяцы — teal, текущий — cyan;
+    // убыточные месяцы остаются красными (семантика важнее копии).
+    const barColor =
+      m.value === 0
+        ? colors.border
+        : m.value < 0
+          ? colors.loss
+          : m.isCurrent
+            ? colors.chartCurrent
+            : colors.chartTeal;
+    return (
+      <Pressable
+        key={m.key}
+        style={[
+          styles.chartBarWrap,
+          isWideChart && styles.chartBarWrapFixed,
+        ]}
+        onPress={() =>
+          setSelectedMonth(selectedMonth === m.key ? null : m.key)
+        }
+      >
+        <View
+          style={[
+            styles.chartBar,
+            {
+              height: m.value === 0 ? 3 : h,
+              backgroundColor: barColor,
+            },
+            selectedMonth === m.key && styles.chartBarSelected,
+          ]}
+        />
+        <Text
+          style={[
+            styles.chartBarLabel,
+            m.isCurrent && { color: colors.textMuted },
+          ]}
+        >
+          {m.label}
+        </Text>
+      </Pressable>
+    );
+  };
 
   if (state === "loading" && !trades.length && totalCount === 0) {
     return (
@@ -570,7 +666,8 @@ export default function DashboardScreen() {
         </View>
       </View>
 
-      {/* Бар-чарт PnL по месяцам */}
+      {/* Бар-чарт PnL по месяцам: при >6 месяцах — горизонтальный скролл,
+          чтобы график «расширялся» как на сайте */}
       <View style={styles.chartCard}>
         <View style={styles.chartHeader}>
           <Text style={styles.chartTitle}>PNL ПО МЕСЯЦАМ</Text>
@@ -578,50 +675,22 @@ export default function DashboardScreen() {
             {chartSubtitle}
           </Text>
         </View>
-        <View style={styles.chartBars}>
-          {monthly.map((m) => {
-            // 88% — запас под подпись месяца, чтобы столбец 100% не вылезал
-            const h = Math.max(3, (Math.abs(m.value) / maxAbsMonthly) * 88);
-            // Палитра веба: исторические месяцы — teal, текущий — cyan;
-            // убыточные месяцы остаются красными (семантика важнее копии).
-            const barColor =
-              m.value === 0
-                ? colors.border
-                : m.value < 0
-                  ? colors.loss
-                  : m.isCurrent
-                    ? colors.chartCurrent
-                    : colors.chartTeal;
-            return (
-              <Pressable
-                key={m.key}
-                style={styles.chartBarWrap}
-                onPress={() =>
-                  setSelectedMonth(selectedMonth === m.key ? null : m.key)
-                }
-              >
-                <View
-                  style={[
-                    styles.chartBar,
-                    {
-                      height: `${m.value === 0 ? 3 : h}%`,
-                      backgroundColor: barColor,
-                    },
-                    selectedMonth === m.key && styles.chartBarSelected,
-                  ]}
-                />
-                <Text
-                  style={[
-                    styles.chartBarLabel,
-                    m.isCurrent && { color: colors.textMuted },
-                  ]}
-                >
-                  {m.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        {isWideChart ? (
+          <ScrollView
+            ref={chartScrollRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.chartScroll}
+            contentContainerStyle={styles.chartBarsContent}
+            onContentSizeChange={() =>
+              chartScrollRef.current?.scrollToEnd({ animated: false })
+            }
+          >
+            {monthly.map(renderChartBar)}
+          </ScrollView>
+        ) : (
+          <View style={styles.chartBars}>{monthly.map(renderChartBar)}</View>
+        )}
       </View>
 
       {/* Кнопки действий */}
@@ -958,9 +1027,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 8,
-    height: 110,
+    height: CHART_HEIGHT_PX,
   },
-  chartBarWrap: { flex: 1, gap: 6, height: "100%" },
+  // Вьюпорт горизонтального скролла графика (при >6 месяцев).
+  chartScroll: { height: CHART_HEIGHT_PX },
+  // Контент скролла: flexDirection row задан самим ScrollView.
+  chartBarsContent: { gap: 8, paddingRight: 8, alignItems: "flex-end" },
+  // Фикс «графика вверх ногами»: без justifyContent: "flex-end" бары
+  // прижимались к ВЕРХУ контейнера и свисали вниз, а подписи месяцев
+  // прыгали по высоте. Теперь бары растут от базовой линии вверх,
+  // как на сайте.
+  chartBarWrap: {
+    flex: 1,
+    gap: 6,
+    height: "100%",
+    justifyContent: "flex-end",
+  },
+  // Режим скролла: фикс ширина/высота вместо flex:1/100%.
+  chartBarWrapFixed: {
+    flex: 0,
+    width: CHART_BAR_WIDTH_PX,
+    height: CHART_HEIGHT_PX,
+  },
   chartBar: {
     width: "100%",
     borderRadius: 2,
