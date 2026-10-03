@@ -38,10 +38,16 @@ async function secureGet(key: string): Promise<string | null> {
   const n = Number.parseInt(meta, 10);
   if (!Number.isFinite(n) || n <= 0) return null;
 
-  let value = "";
-  for (let i = 0; i < n; i++) {
-    value += (await SecureStore.getItemAsync(chunkKey(key, i))) ?? "";
-  }
+  // ⚠️ История оптимизации: чанки читались ПОСЛЕДОВАТЕЛЬНО — 3 чанка
+  // сессии = 3 подряд операции Android Keystore (аппаратное шифрование,
+  // ~200-600мс каждая) — заметная часть «Вход в систему…» при каждом
+  // запуске. Операции независимы — читаем параллельно.
+  const parts = await Promise.all(
+    Array.from({ length: n }, (_, i) =>
+      SecureStore.getItemAsync(chunkKey(key, i)),
+    ),
+  );
+  const value = parts.join("");
   return value || null;
 }
 
@@ -55,12 +61,16 @@ async function secureSet(key: string, value: string): Promise<void> {
 
   const n = Math.ceil(value.length / CHUNK_SIZE);
   await SecureStore.setItemAsync(chunksMetaKey(key), String(n));
-  for (let i = 0; i < n; i++) {
-    await SecureStore.setItemAsync(
-      chunkKey(key, i),
-      value.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE),
-    );
-  }
+  // Запись чанков параллельно — независимые операции Keystore (см.
+  // комментарий в secureGet).
+  await Promise.all(
+    Array.from({ length: n }, (_, i) =>
+      SecureStore.setItemAsync(
+        chunkKey(key, i),
+        value.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE),
+      ),
+    ),
+  );
 }
 
 async function secureRemove(key: string): Promise<void> {
@@ -68,13 +78,13 @@ async function secureRemove(key: string): Promise<void> {
   if (meta != null) {
     const n = Number.parseInt(meta, 10);
     if (Number.isFinite(n)) {
-      for (let i = 0; i < n; i++) {
-        try {
-          await SecureStore.deleteItemAsync(chunkKey(key, i));
-        } catch {
-          // ключа нет — ок
-        }
-      }
+      // Параллельное удаление (см. secureGet) — ошибки «ключа нет»
+      // подавляем как и раньше.
+      await Promise.all(
+        Array.from({ length: n }, (_, i) =>
+          SecureStore.deleteItemAsync(chunkKey(key, i)).catch(() => {}),
+        ),
+      );
     }
     try {
       await SecureStore.deleteItemAsync(chunksMetaKey(key));
@@ -145,6 +155,37 @@ const safeStorage = {
 
 let supabaseClient: SupabaseClient | null = null;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Таймауты сетевых запросов
+//
+// ⚠️ История бага: у supabase-js НЕТ таймаута по умолчанию — на флакающей
+// мобильной сети (5G с потерями пакетов, DPI, кривой IPv6 оператора) запрос
+// мог висеть бесконечно. Симптом: вечный спиннер «Загрузка дашборда…» без
+// ошибки и без кнопки «Повторить». AbortController превращает зависание в
+// обычную ошибку за конечное время — экраны уже умеют её показывать.
+//
+// Данные (PostgREST/RPC): 15с — достаточно для 1 RTT + полезная нагрузка.
+// Auth (/auth/v1/*): 60с — обмен PKCE-кода на медленной сети занимает
+// десятки секунд (экран /auth/callback обещает «до минуты» и имеет
+// собственный жёсткий потолок 60с — таймауты синхронизированы).
+// ─────────────────────────────────────────────────────────────────────────────
+const DATA_TIMEOUT_MS = 15_000;
+const AUTH_TIMEOUT_MS = 60_000;
+
+function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  const ms = String(input).includes("/auth/v1/")
+    ? AUTH_TIMEOUT_MS
+    : DATA_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(input, { ...init, signal: controller.signal }).finally(() => {
+    clearTimeout(timer);
+  });
+}
+
 export function getSupabase(): SupabaseClient {
   if (supabaseClient) return supabaseClient;
 
@@ -157,6 +198,7 @@ export function getSupabase(): SupabaseClient {
   }
 
   supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { fetch: fetchWithTimeout },
     auth: {
       storage: safeStorage,
       autoRefreshToken: true,

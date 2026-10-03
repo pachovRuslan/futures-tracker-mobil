@@ -1,10 +1,11 @@
+import { TrendLoader } from "@/components/TrendLoader";
 import { colors } from "@/theme/colors";
-import { ActivityIndicator, SafeAreaView, StyleSheet } from "react-native";
+import { SafeAreaView, StyleSheet } from "react-native";
 
 export function LoadingScreen() {
   return (
     <SafeAreaView style={styles.container}>
-      <ActivityIndicator size="large" color={colors.accent} />
+      <TrendLoader />
     </SafeAreaView>
   );
 }

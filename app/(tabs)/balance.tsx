@@ -1,3 +1,4 @@
+import { TrendLoader } from "@/components/TrendLoader";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/services/auth";
 import type { BalanceSnapshot, BalanceType } from "@/shared/types";
@@ -143,7 +144,7 @@ export default function BalanceScreen() {
   if (loading && snapshots.length === 0) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.accent} />
+        <TrendLoader />
         <Text style={styles.muted}>Загрузка баланса…</Text>
       </View>
     );

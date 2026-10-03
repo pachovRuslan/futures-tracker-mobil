@@ -18,11 +18,19 @@ const EMPTY: Entitlement = {
 export async function fetchEntitlement(): Promise<Entitlement> {
   try {
     const supabase = getSupabase();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
 
-    if (!user) return EMPTY;
+    // ⚠️ История оптимизации: раньше здесь стоял getUser() — это СЕТЕВОЙ
+    // запрос валидации JWT на сервере Supabase (~1 RTT). useSubscription
+    // монтируется на КАЖДОМ экране (дашборд, настройки, пейволл,
+    // подключения) — на каждом экране статус премиума задерживался на
+    // 2 последовательных RTT (getUser → RPC). getSession() читает сессию
+    // из локального хранилища (SecureStore) без сети: подлинность токена
+    // всё равно проверяет RLS при самом RPC-запросе.
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.user) return EMPTY;
 
     const { data, error } = await supabase.rpc("get_my_entitlement");
 
@@ -47,7 +55,30 @@ export async function fetchEntitlement(): Promise<Entitlement> {
   }
 }
 
-/** Проверка premium-статуса. Единственный источник правды — БД Supabase. */
-export async function checkPremiumStatus(): Promise<Entitlement> {
-  return fetchEntitlement();
+/**
+ * Проверка premium-статуса с кэшем (TTL 60 секунд).
+ *
+ * Статус премиума меняется редко (выдаётся вручную), а useSubscription
+ * монтируется на каждом экране — без кэша каждый переход по табам
+ * выполнял RPC-запрос заново. 60 секунд максимума устаревания
+ * self-healing: следующая навигация через минуту всё увидит.
+ *
+ * force=true — обход кэша (для явного refresh после покупки/выдачи).
+ */
+const ENTITLEMENT_CACHE_TTL_MS = 60_000;
+let entitlementCache: { at: number; value: Entitlement } | null = null;
+
+export async function checkPremiumStatus(
+  force = false,
+): Promise<Entitlement> {
+  if (
+    !force &&
+    entitlementCache &&
+    Date.now() - entitlementCache.at < ENTITLEMENT_CACHE_TTL_MS
+  ) {
+    return entitlementCache.value;
+  }
+  const value = await fetchEntitlement();
+  entitlementCache = { at: Date.now(), value };
+  return value;
 }

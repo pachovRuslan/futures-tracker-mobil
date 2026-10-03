@@ -1,10 +1,10 @@
+import { TrendLoader } from "@/components/TrendLoader";
 import { useTrades } from "@/hooks/useTrades";
 import { fmtDate, fmtPnl, tradeNetPnl } from "@/shared/trade-model";
 import { EXCHANGE_LABELS, type TradeRow } from "@/shared/types";
 import { colors } from "@/theme/colors";
 import { useCallback, useMemo } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   StyleSheet,
   Text,
@@ -72,7 +72,7 @@ export default function TradesScreen() {
   if (loading && trades.length === 0) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.accent} />
+        <TrendLoader />
         <Text style={styles.muted}>Загрузка сделок…</Text>
       </View>
     );

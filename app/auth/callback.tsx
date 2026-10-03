@@ -1,3 +1,4 @@
+import { TrendLoader } from "@/components/TrendLoader";
 import {
   consumePendingCallbackUrl,
   describeOAuthError,
@@ -9,7 +10,6 @@ import { colors } from "@/theme/colors";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Linking,
   StyleSheet,
@@ -176,7 +176,7 @@ export default function AuthCallback() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color={colors.accent} />
+      <TrendLoader />
       <Text style={styles.text}>
         {slow
           ? "Завершаем вход — на медленной сети это может занять до минуты…"

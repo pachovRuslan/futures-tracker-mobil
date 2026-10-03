@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { TrendLoader } from "@/components/TrendLoader";
 import { useSubscription } from "@/hooks/useSubscription";
 import { api } from "@/services/api";
 import { EXCHANGE_CONNECTIONS_ENABLED } from "@/shared/config";
@@ -8,7 +9,6 @@ import { colors } from "@/theme/colors";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
@@ -124,7 +124,7 @@ export default function ConnectionsScreen() {
   if (loading && connections.length === 0) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.accent} />
+        <TrendLoader />
         <Text style={styles.muted}>Загрузка подключений…</Text>
       </View>
     );

@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 
+import { TrendLoader } from "@/components/TrendLoader";
 import { useAuth } from "@/context/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { getSupabase } from "@/services/auth";
@@ -21,7 +22,6 @@ import { colors } from "@/theme/colors";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -438,7 +438,7 @@ export default function DashboardScreen() {
   if (state === "loading" && !trades.length && totalCount === 0) {
     return (
       <View style={[styles.center, { paddingTop: insets.top + 24 }]}>
-        <ActivityIndicator size="large" color={colors.accent} />
+        <TrendLoader />
         <Text style={styles.muted}>Загрузка дашборда…</Text>
       </View>
     );
