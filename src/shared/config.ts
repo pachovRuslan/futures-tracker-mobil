@@ -25,6 +25,19 @@ export const FREE_TRADE_LIMIT = 50;
 /** Дефолтный лимит сделок в одном запросе. */
 export const TRADES_PAGE_SIZE = 500;
 
+/**
+ * Функция «Подключения бирж» (авто-синк сделок по API-ключам).
+ *
+ * Kill-switch всей фичи: пока флаг выключен, кнопка «Биржа» на дашборде,
+ * пункт «Подключения бирж» в настройках и сам экран /connections скрыты
+ * (deep link уводит на дашборд).
+ *
+ * Бэкенд: /api/connections на сайте теперь принимает Bearer-JWT от
+ * мобильного приложения (коммит «Bearer-JWT auth for mobile API bridge»).
+ * Выключить фичу на случай проблем — поставить false и пересобрать.
+ */
+export const EXCHANGE_CONNECTIONS_ENABLED = true;
+
 if (__DEV__ && !isSupabaseConfigured) {
   const env = Platform.OS === "web" ? "browser" : Platform.OS;
   console.warn(

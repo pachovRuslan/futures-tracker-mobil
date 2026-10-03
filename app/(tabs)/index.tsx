@@ -3,7 +3,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/context/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { getSupabase } from "@/services/auth";
-import { FREE_TRADE_LIMIT, TRADES_PAGE_SIZE } from "@/shared/config";
+import {
+  EXCHANGE_CONNECTIONS_ENABLED,
+  FREE_TRADE_LIMIT,
+  TRADES_PAGE_SIZE,
+} from "@/shared/config";
 import type { TradeRow } from "@/shared/types";
 import {
   calculateWinRate,
@@ -707,17 +711,19 @@ export default function DashboardScreen() {
           <Ionicons name="add" size={18} color="#fff" />
           <Text style={styles.actionButtonTextDark}>Сделка</Text>
         </Pressable>
-        <Pressable
-          style={[styles.actionButton, !isPremium && styles.actionButtonLocked]}
-          onPress={handleAddExchange}
-        >
-          <Ionicons
-            name={isPremium ? "sync" : "lock-closed"}
-            size={18}
-            color={colors.text}
-          />
-          <Text style={styles.actionButtonText}>Биржа</Text>
-        </Pressable>
+        {EXCHANGE_CONNECTIONS_ENABLED && (
+          <Pressable
+            style={[styles.actionButton, !isPremium && styles.actionButtonLocked]}
+            onPress={handleAddExchange}
+          >
+            <Ionicons
+              name={isPremium ? "sync" : "lock-closed"}
+              size={18}
+              color={colors.text}
+            />
+            <Text style={styles.actionButtonText}>Биржа</Text>
+          </Pressable>
+        )}
       </View>
 
       {/* Последние сделки */}

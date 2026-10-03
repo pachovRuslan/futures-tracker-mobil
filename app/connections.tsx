@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useSubscription } from "@/hooks/useSubscription";
 import { api } from "@/services/api";
+import { EXCHANGE_CONNECTIONS_ENABLED } from "@/shared/config";
 import type { ApiExchange, Connection } from "@/shared/types";
 import { EXCHANGES, EXCHANGE_LABELS } from "@/shared/types";
 import { colors } from "@/theme/colors";
@@ -31,6 +32,11 @@ export default function ConnectionsScreen() {
   const [saving, setSaving] = useState(false);
   const mountedRef = useRef(true);
 
+  // ⚠️ Флаг функции: пока EXCHANGE_CONNECTIONS_ENABLED выключен, экран
+  // закрыт даже для премиума, в т.ч. для прямого deep link (kill-switch
+  // в src/shared/config.ts — для ревью сторов и сбоев бэкенда;
+  // бэкенд-мост уже развёрнут, см. коммит про Bearer-JWT bridge).
+  //
   // ⚠️ Гейт НА УРОВНЕ ЭКРАНА, а не только кнопки на дашборде. Раньше
   // «Подключения бирж» в настройках вёл сюда без проверки premium —
   // FREE-пользователь получал доступ к premium-функции через второй вход.
@@ -42,6 +48,10 @@ export default function ConnectionsScreen() {
   // и автоперенаправлял обратно — получался «отскок» пейволл→дашборд
   // без единого действия со стороны пользователя.
   useEffect(() => {
+    if (!EXCHANGE_CONNECTIONS_ENABLED) {
+      router.replace("/");
+      return;
+    }
     if (entitlementLoading) return;
     if (!isPremium) {
       router.replace("/paywall");
@@ -65,10 +75,10 @@ export default function ConnectionsScreen() {
 
   useEffect(() => {
     mountedRef.current = true;
-    // Не дёргаем бэкенд, пока premium не подтверждён: гейт может увести
-    // экран на пейволл — останется висящий запрос и ошибка на уже
-    // размонтированном экране.
-    if (!entitlementLoading && isPremium) {
+    // Не дёргаем бэкенд, пока premium не подтверждён ИЛИ функция выключена:
+    // гейт может увести экран на пейволл/дашборд — останется висящий
+    // запрос и ошибка на уже размонтированном экране.
+    if (EXCHANGE_CONNECTIONS_ENABLED && !entitlementLoading && isPremium) {
       load();
     }
     return () => {

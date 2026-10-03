@@ -1,5 +1,6 @@
 import { useAuth } from "@/context/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { EXCHANGE_CONNECTIONS_ENABLED } from "@/shared/config";
 import { colors } from "@/theme/colors";
 import { useRouter } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -32,23 +33,25 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       )}
 
-      <TouchableOpacity
-        style={styles.menuItem}
-        onPress={() => {
-          // FREE — сразу пейволл, без мелькания экрана «Подключения»
-          // (экранный гейт при этом всё равно остаётся — он защищает и
-          // deep link). Пока статус ещё грузится, решение принимает гейт
-          // самого экрана, а не эта кнопка.
-          if (!subLoading && !isPremium) {
-            router.push("/paywall");
-          } else {
-            router.push("/connections");
-          }
-        }}
-      >
-        <Text style={styles.menuText}>Подключения бирж</Text>
-        <Text style={styles.arrow}>→</Text>
-      </TouchableOpacity>
+      {EXCHANGE_CONNECTIONS_ENABLED && (
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => {
+            // FREE — сразу пейволл, без мелькания экрана «Подключения»
+            // (экранный гейт при этом всё равно остаётся — он защищает и
+            // deep link). Пока статус ещё грузится, решение принимает гейт
+            // самого экрана, а не эта кнопка.
+            if (!subLoading && !isPremium) {
+              router.push("/paywall");
+            } else {
+              router.push("/connections");
+            }
+          }}
+        >
+          <Text style={styles.menuText}>Подключения бирж</Text>
+          <Text style={styles.arrow}>→</Text>
+        </TouchableOpacity>
+      )}
 
       <TouchableOpacity
         style={styles.logoutButton}
