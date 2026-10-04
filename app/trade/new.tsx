@@ -89,10 +89,24 @@ export default function NewTradeScreen() {
 
       router.back();
     } catch (e) {
-      Alert.alert(
-        "Ошибка",
-        e instanceof Error ? e.message : "Не удалось сохранить сделку",
-      );
+      const msg = e instanceof Error ? e.message : String(e);
+      // Серверный лимит FREE (триггер enforce_free_trade_limit, миграция 10):
+      // клиентская проверка — лишь UX, бэкенд — источник правды.
+      if (msg.includes("FREE_TRADE_LIMIT_REACHED")) {
+        Alert.alert(
+          "Лимит бесплатного плана",
+          "В FREE можно вести до 50 сделок. Premium снимает ограничение.",
+          [
+            { text: "Позже", style: "cancel" },
+            {
+              text: "Перейти на Premium",
+              onPress: () => router.push("/paywall"),
+            },
+          ],
+        );
+        return;
+      }
+      Alert.alert("Ошибка", msg);
     } finally {
       setSaving(false);
     }

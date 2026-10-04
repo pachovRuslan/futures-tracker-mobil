@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { TrendLoader } from "@/components/TrendLoader";
 import { useSubscription } from "@/hooks/useSubscription";
-import { api } from "@/services/api";
+import { api, isPremiumRequired } from "@/services/api";
 import { EXCHANGE_CONNECTIONS_ENABLED } from "@/shared/config";
 import type { ApiExchange, Connection } from "@/shared/types";
 import { EXCHANGES, EXCHANGE_LABELS } from "@/shared/types";
@@ -65,13 +65,18 @@ export default function ConnectionsScreen() {
       const data = await api.getConnections();
       if (mountedRef.current) setConnections(data.connections ?? []);
     } catch (e) {
+      // Серверный премиум-гейт: подписка истекла, пока юзер был на экране.
+      if (isPremiumRequired(e)) {
+        router.replace("/paywall");
+        return;
+      }
       if (mountedRef.current) {
         setError(e instanceof Error ? e.message : String(e));
       }
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -95,6 +100,21 @@ export default function ConnectionsScreen() {
       setApiSecret("");
       await load();
     } catch (e) {
+      // Серверный премиум-гейт (волна 1): 402 вместо тихого обхода.
+      if (isPremiumRequired(e)) {
+        Alert.alert(
+          "Требуется Premium",
+          "Подключения бирж и авто-синк доступны по подписке Premium.",
+          [
+            { text: "Позже", style: "cancel" },
+            {
+              text: "Перейти на Premium",
+              onPress: () => router.push("/paywall"),
+            },
+          ],
+        );
+        return;
+      }
       Alert.alert("Ошибка", e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);

@@ -24,10 +24,23 @@ class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** Машиночитаемый код ошибки бэкенда (напр. PREMIUM_REQUIRED). */
+    readonly code: string | null = null,
   ) {
     super(message);
     this.name = "ApiError";
   }
+}
+
+/**
+ * Бэкенд ответил 402 PREMIUM_REQUIRED — FREE-юзер дёрнул премиум-фичу
+ * (серверный гейт волны 1). Вызывающий экран должен открыть пейволл.
+ */
+export function isPremiumRequired(e: unknown): boolean {
+  return (
+    e instanceof ApiError &&
+    (e.code === "PREMIUM_REQUIRED" || e.status === 402)
+  );
 }
 
 async function request<T>(
@@ -46,14 +59,16 @@ async function request<T>(
 
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
+    let code: string | null = null;
     try {
       const data = await res.json();
       message = data.error ?? message;
+      code = typeof data.code === "string" ? data.code : null;
     } catch {
       // тело не JSON — используем statusText
       if (res.statusText) message = res.statusText;
     }
-    throw new ApiError(message, res.status);
+    throw new ApiError(message, res.status, code);
   }
 
   // 204 No Content — не парсим JSON.
