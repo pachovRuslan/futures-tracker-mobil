@@ -117,8 +117,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // SIGNED_IN обновит user и RootNavigator сделает redirect.
       },
       logout: async () => {
-        await signOut();
-        if (mountedRef.current) setUser(null);
+        // После удаления аккаунта (rpc delete_my_account) network-вызов
+        // signOut может упасть — сессия уже мертва на сервере. Локальный
+        // state очищаем в любом случае, иначе юзер останется «висеть»
+        // в приложении с удалённым аккаунтом.
+        try {
+          await signOut();
+        } finally {
+          if (mountedRef.current) setUser(null);
+        }
       },
     }),
     [user, loading, refresh],

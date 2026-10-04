@@ -1,14 +1,78 @@
 import { useAuth } from "@/context/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
-import { EXCHANGE_CONNECTIONS_ENABLED } from "@/shared/config";
+import { getSupabase } from "@/services/auth";
+import { resetPurchases } from "@/services/purchases";
+import {
+  EXCHANGE_CONNECTIONS_ENABLED,
+  PRIVACY_POLICY_URL,
+  TERMS_OF_USE_URL,
+} from "@/shared/config";
 import { colors } from "@/theme/colors";
 import { useRouter } from "expo-router";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Linking,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
   const { isPremium, loading: subLoading } = useSubscription();
   const router = useRouter();
+  const [deleting, setDeleting] = useState(false);
+
+  // ─── Удаление аккаунта (Google Play Account Deletion / App Review 5.1.1(v)) ──
+  //
+  // RPC delete_my_account() (миграция 10 на сайте) сносит auth.users;
+  // trades / balance_snapshots / user_entitlements / exchange_connections
+  // удаляются каскадом. Перед удалением выходим из RevenueCat и из сессии.
+  const confirmDeleteAccount = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      const { error } = await getSupabase().rpc("delete_my_account");
+      if (error) throw error;
+
+      try {
+        await resetPurchases();
+      } catch {
+        // RC-logout не критичен: подписка отвяжется при следующем logIn.
+      }
+
+      // Сессия уже мертва (auth.users удалён) — logout очищает локальный
+      // state даже если network-вызов signOut упадёт.
+      await logout();
+      // Дальше RootNavigator сам уведёт на /login (user = null).
+    } catch (e) {
+      Alert.alert(
+        "Не удалось удалить аккаунт",
+        e instanceof Error ? e.message : String(e),
+      );
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Удалить аккаунт?",
+      "Будут безвозвратно удалены: профиль, все сделки, снимки баланса, подключения бирж и подписка Premium. Это действие нельзя отменить.",
+      [
+        { text: "Отмена", style: "cancel" },
+        {
+          text: "Удалить навсегда",
+          style: "destructive",
+          onPress: () => {
+            void confirmDeleteAccount();
+          },
+        },
+      ],
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -54,6 +118,22 @@ export default function SettingsScreen() {
       )}
 
       <TouchableOpacity
+        style={styles.menuItem}
+        onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
+      >
+        <Text style={styles.menuText}>Политика конфиденциальности</Text>
+        <Text style={styles.arrow}>→</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.menuItem}
+        onPress={() => Linking.openURL(TERMS_OF_USE_URL)}
+      >
+        <Text style={styles.menuText}>Условия использования</Text>
+        <Text style={styles.arrow}>→</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
         style={styles.logoutButton}
         onPress={async () => {
           try {
@@ -64,6 +144,18 @@ export default function SettingsScreen() {
         }}
       >
         <Text style={styles.logoutText}>Выйти</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.deleteButton}
+        onPress={handleDeleteAccount}
+        disabled={deleting}
+      >
+        {deleting ? (
+          <ActivityIndicator size="small" color={colors.loss} />
+        ) : (
+          <Text style={styles.deleteText}>Удалить аккаунт</Text>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -106,4 +198,6 @@ const styles = StyleSheet.create({
   arrow: { color: colors.textFaint, fontSize: 16 },
   logoutButton: { marginTop: 24, padding: 16, alignItems: "center" },
   logoutText: { color: colors.loss, fontSize: 14 },
+  deleteButton: { marginTop: 4, padding: 16, alignItems: "center" },
+  deleteText: { color: colors.loss, fontSize: 12, opacity: 0.8 },
 });
