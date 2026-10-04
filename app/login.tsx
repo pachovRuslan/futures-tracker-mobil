@@ -1,7 +1,7 @@
 import { useAuth } from "@/context/AuthContext";
+import { getAppleAuthentication } from "@/services/auth";
 import { colors } from "@/theme/colors";
-import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,10 +12,35 @@ import {
   View,
 } from "react-native";
 
+/**
+ * Экран входа.
+ *
+ * Кнопка Apple (системный компонент AppleAuthenticationButton — со
+ * официальной иконкой и стилями Human Interface Guidelines) показывается
+ * только на iOS и только если устройство поддерживает Sign in with Apple.
+ * На Android/web ленивый require модуля вообще не выполняется.
+ */
+
+// null на Android/web — модуль iOS-only, не вычисляем его там вовсе.
+const AppleAuth = getAppleAuthentication();
+
 export default function LoginScreen() {
-  const { login } = useAuth();
-  const router = useRouter();
+  const { login, loginApple } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
+
+  useEffect(() => {
+    if (!AppleAuth) return;
+    let mounted = true;
+    AppleAuth.isAvailableAsync()
+      .then((v) => {
+        if (mounted) setAppleAvailable(v);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleLogin = async () => {
     if (loading) return;
@@ -26,6 +51,22 @@ export default function LoginScreen() {
       // → RootNavigator сделает redirect на "/".
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Не удалось войти";
+      Alert.alert("Ошибка входа", msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAppleLogin = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      await loginApple();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // Отмена нативного шита Apple — не ошибка, молча выходим
+      // (поведение как у отмены браузера в Google-флоу).
+      if (msg.includes("ERR_REQUEST_CANCELED")) return;
       Alert.alert("Ошибка входа", msg);
     } finally {
       setLoading(false);
@@ -49,6 +90,24 @@ export default function LoginScreen() {
             <Text style={styles.buttonText}>Войти через Google</Text>
           )}
         </TouchableOpacity>
+
+        {AppleAuth && appleAvailable ? (
+          <View
+            style={[styles.appleWrap, loading && styles.buttonDisabled]}
+            pointerEvents={loading ? "none" : "auto"}
+          >
+            <AppleAuth.AppleAuthenticationButton
+              buttonType={
+                AppleAuth.AppleAuthenticationButtonType.SIGN_IN
+              }
+              buttonStyle={AppleAuth.AppleAuthenticationButtonStyle.BLACK}
+              cornerRadius={8}
+              style={styles.appleButton}
+              onPress={handleAppleLogin}
+            />
+          </View>
+        ) : null}
+
         <Text style={styles.hint}>
           Вход только для пользователей из allowlist
         </Text>
@@ -92,6 +151,15 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: "#fff", fontSize: 14, fontWeight: "500" },
+  appleWrap: {
+    width: "100%",
+    minHeight: 44,
+    justifyContent: "center",
+  },
+  appleButton: {
+    width: "100%",
+    height: 44,
+  },
   hint: {
     fontSize: 10,
     color: colors.textFaint,

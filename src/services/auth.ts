@@ -11,6 +11,7 @@ import {
 } from "@supabase/supabase-js";
 import { isRunningInExpoGo } from "expo";
 import { makeRedirectUri } from "expo-auth-session";
+import * as Crypto from "expo-crypto";
 import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
@@ -500,6 +501,72 @@ export async function exchangeCodeOnce(code: string): Promise<User | null> {
     if (session?.user) return session.user;
     throw e;
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sign in with Apple (iOS) — требование App Store Guideline 4.8
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Ленивый доступ к expo-apple-authentication: нативный модуль существует
+ * только на iOS. На Android/web не вычисляем его вовсе (require внутри
+ * платформенной ветки — Metro всё равно положит код в бандл для iOS,
+ * но на Android модуль не будет исполнен).
+ */
+export function getAppleAuthentication():
+  | typeof import("expo-apple-authentication")
+  | null {
+  if (Platform.OS !== "ios") return null;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("expo-apple-authentication");
+}
+
+/**
+ * Вход через Apple: identity token верифицируется на сервере Supabase
+ * (signInWithIdToken), nonce связывает запрос с токеном (Supabase хеширует
+ * rawNonce и сверяет с claim'ом `nonce` внутри Apple ID token).
+ */
+export async function signInWithApple(): Promise<void> {
+  const Apple = getAppleAuthentication();
+  if (!Apple) {
+    throw new Error("Sign in with Apple доступен только на iOS");
+  }
+
+  const available = await Apple.isAvailableAsync();
+  if (!available) {
+    throw new Error(
+      "Apple ID не настроен на устройстве (Настройки → [имя] → Вход с Apple).",
+    );
+  }
+
+  const rawNonce = Crypto.randomUUID().replace(/-/g, "");
+  const hashedNonce = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    rawNonce,
+  );
+
+  const credential = await Apple.signInAsync({
+    requestedScopes: [
+      Apple.AppleAuthenticationScope.FULL_NAME,
+      Apple.AppleAuthenticationScope.EMAIL,
+    ],
+    nonce: hashedNonce,
+  });
+
+  if (!credential.identityToken) {
+    throw new Error("Apple не вернул identity token — попробуйте ещё раз");
+  }
+
+  const supabase = getSupabase();
+  const { error } = await supabase.auth.signInWithIdToken({
+    provider: "apple",
+    token: credential.identityToken,
+    // nonce — параметр верхнего уровня credentials (supabase-js):
+    // сервер хеширует его и сверяет с claim'ом `nonce` внутри токена.
+    nonce: rawNonce,
+  });
+  if (error) throw error;
+  // Сессия установится через onAuthStateChange → AuthProvider → redirect.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
