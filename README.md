@@ -2,10 +2,11 @@
 
 Мобильное приложение-трекер фьючерсных сделок (Expo / React Native / Expo Router / Supabase).
 
-- **Auth**: Google OAuth через Supabase (PKCE)
+- **Auth**: Google OAuth + Sign in with Apple (iOS) через Supabase (PKCE)
 - **Данные**: чтение напрямую из Supabase (Row Level Security)
 - **Биржи**: подключение API-ключей через серверный REST API (premium)
-- **Premium**: выдаётся вручную через таблицу `user_entitlements`
+- **Premium**: подписка через встроенную покупку (RevenueCat), сверка —
+  сервером в `user_entitlements`
 
 ## Быстрый старт
 
@@ -23,6 +24,8 @@ npx expo start --web   # веб-версия на localhost:8081
 | `EXPO_PUBLIC_SUPABASE_URL` | URL проекта Supabase (`https://<ref>.supabase.co`) |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | anon key проекта |
 | `EXPO_PUBLIC_API_URL` | REST-бэкенд для подключений бирж (optional) |
+| `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY` | Публичный RC-ключ Google Play (`goog_...`) — покупки в Android |
+| `EXPO_PUBLIC_REVENUECAT_IOS_KEY` | Публичный RC-ключ App Store (`appl_...`) — покупки в iOS |
 
 > `EXPO_PUBLIC_*` встраиваются в бандл **в момент сборки**. После изменения
 > `.env` перезапускайте dev-сервер с `--clear`.
@@ -33,7 +36,24 @@ npx expo start --web   # веб-версия на localhost:8081
 EXPO_PUBLIC_SUPABASE_URL=https://xxxxxxxxxxxxxxxx.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...
 EXPO_PUBLIC_API_URL=https://futures-tracker-lake.vercel.app
+EXPO_PUBLIC_REVENUECAT_ANDROID_KEY=goog_xxxxxxxxxxxxxxxx
+EXPO_PUBLIC_REVENUECAT_IOS_KEY=appl_xxxxxxxxxxxxxxxx
 ```
+
+## Настройка RevenueCat (покупка Premium)
+
+1. Создайте проект в [app.revenuecat.com](https://app.revenuecat.com),
+   добавьте приложения Android (package `com.pachovruslan.futurestracker`)
+   и iOS (bundle id тот же).
+2. Заведите продукты-подписки в Google Play Console / App Store Connect и
+   подтяните их в RC (Products → Subscriptions), затем создайте entitlement
+   с идентификатором `premium` и привяжите продукты к нему.
+3. Скопируйте публичные ключи в `.env` (`EXPO_PUBLIC_REVENUECAT_*`).
+4. На сайте задайте `REVENUECAT_SECRET_API_KEY` (v1 secret key `sk_...`) и
+   `REVENUECAT_ENTITLEMENT_ID=premium` — их использует
+   `/api/billing/sync-entitlement`.
+
+Подробнее — в инструкции к патчу волны 1 (WAVE1-APPLY.md).
 
 ## Настройка Supabase
 

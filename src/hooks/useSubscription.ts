@@ -14,7 +14,8 @@ export interface UseSubscriptionResult {
   isPremium: boolean;
   entitlement: Entitlement | null;
   loading: boolean;
-  refresh: () => Promise<void>;
+  /** force=true обходит 60-секундный кэш — обязательно после покупки. */
+  refresh: (force?: boolean) => Promise<void>;
 }
 
 export function useSubscription(): UseSubscriptionResult {
@@ -24,11 +25,11 @@ export function useSubscription(): UseSubscriptionResult {
   const mountedRef = useRef(true);
   const requestIdRef = useRef(0);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (force = false) => {
     const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
-      const status = await checkPremiumStatus();
+      const status = await checkPremiumStatus(force);
       // Защита от race: обновляем state только если это последний запрос.
       if (mountedRef.current && requestId === requestIdRef.current) {
         if (__DEV__) {

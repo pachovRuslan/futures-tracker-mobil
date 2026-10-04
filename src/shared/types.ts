@@ -152,7 +152,12 @@ export interface ConnectionsResponse {
 // Premium / entitlement
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type EntitlementSource = "allowlist" | "manual" | "none";
+export type EntitlementSource =
+  | "allowlist"
+  | "manual"
+  | "app_store"
+  | "play_store"
+  | "none";
 
 export interface Entitlement {
   isPremium: boolean;

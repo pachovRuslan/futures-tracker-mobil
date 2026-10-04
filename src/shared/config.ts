@@ -25,6 +25,42 @@ export const FREE_TRADE_LIMIT = 50;
 /** Дефолтный лимит сделок в одном запросе. */
 export const TRADES_PAGE_SIZE = 500;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// RevenueCat — покупка Premium-подписки внутри приложения
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Публичные SDK-ключи RevenueCat (НЕ секретные — вшиваются в бандл осознанно).
+ * Dashboard → Project Settings → API Keys:
+ *   - EXPO_PUBLIC_REVENUECAT_ANDROID_KEY — «goog_...» (Google Play);
+ *   - EXPO_PUBLIC_REVENUECAT_IOS_KEY     — «appl_...» (App Store).
+ *
+ * Пока ключи не заданы, пейволл показывает заглушку вместо покупки —
+ * приложение остаётся работоспособным (kill-switch на случай проблем RC).
+ */
+export const REVENUECAT_IOS_KEY =
+  process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? "";
+export const REVENUECAT_ANDROID_KEY =
+  process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ?? "";
+
+/** Идентификатор entitlement в RevenueCat (Products → Entitlements). */
+export const REVENUECAT_ENTITLEMENT_ID = "premium";
+
+/** SDK-ключ RC для текущей платформы; null — биллинг не сконфигурирован. */
+export function getRevenueCatApiKey(): string | null {
+  if (Platform.OS === "ios") return REVENUECAT_IOS_KEY || null;
+  if (Platform.OS === "android") return REVENUECAT_ANDROID_KEY || null;
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Юридические страницы (требование Google Play / App Store)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Живут на сайте — публичные, без логина и allowlist. */
+export const PRIVACY_POLICY_URL = `${API_URL}/privacy`;
+export const TERMS_OF_USE_URL = `${API_URL}/terms`;
+
 /**
  * Функция «Подключения бирж» (авто-синк сделок по API-ключам).
  *

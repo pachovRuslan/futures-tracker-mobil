@@ -42,12 +42,23 @@ export async function fetchEntitlement(): Promise<Entitlement> {
     const isExpired =
       row.expires_at && new Date(row.expires_at).getTime() < Date.now();
 
+    // Источник премиума: покупки пишут granted_by = 'revenuecat:<store>',
+    // ручные выдачи — что-то другое (или пусто). От этого зависит, куда
+    // пейволл отправит управлять подпиской.
+    const grantedBy = typeof row.granted_by === "string" ? row.granted_by : "";
+    let source: Entitlement["source"] = "manual";
+    if (grantedBy.startsWith("revenuecat:")) {
+      source = grantedBy.includes("app_store") ? "app_store" : "play_store";
+    } else if (row.is_allowlisted) {
+      source = "allowlist";
+    }
+
     return {
       isPremium: Boolean(row.is_premium) && !isExpired,
       isAllowlisted: Boolean(row.is_allowlisted),
       expiresAt: row.expires_at ? new Date(row.expires_at) : null,
       note: row.note ?? null,
-      source: row.is_allowlisted ? "allowlist" : "manual",
+      source,
     };
   } catch (e) {
     if (__DEV__) console.error("[Entitlements] fetchEntitlement error:", e);

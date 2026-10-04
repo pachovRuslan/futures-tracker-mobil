@@ -1,4 +1,5 @@
 import { signInWithGoogle, getSupabase, signOut } from "@/services/auth";
+import { initPurchases, resetPurchases } from "@/services/purchases";
 import type { User } from "@supabase/supabase-js";
 import {
   createContext,
@@ -77,6 +78,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       authListener.unsubscribe();
     };
   }, []);
+
+  // RevenueCat: привязываем покупки к аккаунту. logIn(userId) делает
+  // app_user_id RC равным supabase user id — именно по нему сервер
+  // сверяет подписку в /api/billing/sync-entitlement. При выходе — logOut.
+  useEffect(() => {
+    if (user?.id) {
+      void initPurchases(user.id);
+    } else {
+      void resetPurchases();
+    }
+  }, [user?.id]);
 
   const refresh = useCallback(async () => {
     const { data } = await getSupabase().auth.getUser();
