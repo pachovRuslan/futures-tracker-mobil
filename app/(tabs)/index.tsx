@@ -11,7 +11,6 @@ import {
 } from "@/shared/config";
 import type { TradeRow } from "@/shared/types";
 import {
-  calculateWinRate,
   fmt,
   fmtDate,
   fmtPnl,
@@ -70,6 +69,62 @@ type ClosedRow = {
   closed_at: string | null;
 };
 
+/**
+ * Строка RPC get_trade_stats() (миграция 11): агрегаты биржа × месяц
+ * по ВСЕМ закрытым сделкам — вместо клиентского расчёта по последним
+ * TRADES_PAGE_SIZE, который занижал итог у трейдеров с >500 сделками.
+ */
+interface StatsRow {
+  exchange: string;
+  /** "YYYY-MM" */
+  month: string;
+  trades: number;
+  wins: number;
+  net_pnl: number;
+  gross_profit: number;
+  gross_loss: number;
+  fee: number;
+  funding: number;
+}
+
+/**
+ * Fallback-расчёт (RPC недоступен — миграция 11 не применена):
+ * те же строки StatsRow, посчитанные на клиенте по последним N
+ * закрытым сделкам. Форма данных идентична — весь код ниже
+ * не различает источник.
+ */
+function aggregateClosedToStats(rows: ClosedRow[]): StatsRow[] {
+  const map = new Map<string, StatsRow>();
+  for (const t of rows) {
+    if (t.closed_at == null) continue;
+    const month = t.closed_at.slice(0, 7);
+    const key = `${t.exchange}|${month}`;
+    const row =
+      map.get(key) ??
+      {
+        exchange: t.exchange,
+        month,
+        trades: 0,
+        wins: 0,
+        net_pnl: 0,
+        gross_profit: 0,
+        gross_loss: 0,
+        fee: 0,
+        funding: 0,
+      };
+    const pnl = tradeNetPnl(t);
+    row.trades += 1;
+    if (pnl > 0) row.wins += 1;
+    row.net_pnl += pnl;
+    if (pnl > 0) row.gross_profit += pnl;
+    else row.gross_loss += pnl;
+    row.fee += t.fee;
+    row.funding += t.funding;
+    map.set(key, row);
+  }
+  return Array.from(map.values());
+}
+
 const MONTH_LABELS = [
   "ЯНВ",
   "ФЕВ",
@@ -107,7 +162,9 @@ export default function DashboardScreen() {
   const { isPremium, entitlement, loading: subLoading } = useSubscription();
 
   const [trades, setTrades] = useState<TradeRow[]>([]);
-  const [closed, setClosed] = useState<ClosedRow[]>([]);
+  /** Агрегаты биржа × месяц: из RPC get_trade_stats (по ВСЕМ сделкам)
+ *  либо fallback-расчёт по последним TRADES_PAGE_SIZE закрытым. */
+  const [statRows, setStatRows] = useState<StatsRow[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [state, setState] = useState<LoadState>("loading");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -130,33 +187,52 @@ export default function DashboardScreen() {
 
         // ⚠️ История бага: раньше ВСЯ статистика считалась по последним 50
         // сделкам (.limit(50)) — из-за этого «ОБЩИЙ P&L» и «СДЕЛОК» были
-        // занижены для пользователей с >50 сделками, а гейт FREE-лимита
-        // срабатывал случайно (50 >= 50). Теперь:
-        //  - totalTrades — точный COUNT (head-запрос);
-        //  - P&L/win-rate/месяцы — по последним TRADES_PAGE_SIZE закрытым
-        //    сделкам (для >500 сделок нужен серверный агрегат-RPC, см. README).
-        const [list, countRes, statsRes] = await Promise.all([
+        // занижены для пользователей с >50 сделками. Волна 2: агрегаты
+        // берутся из серверного RPC get_trade_stats (миграция 11) по ВСЕМ
+        // закрытым сделкам; totalTrades — точный COUNT (head-запрос).
+        // Если RPC недоступен (миграция не применена) — fallback на
+        // клиентский расчёт по последним TRADES_PAGE_SIZE, как в волне 1.
+        const [list, countRes, rpcRes] = await Promise.all([
           supabase
             .from("trades")
             .select(LIST_SELECT)
             .order("closed_at", { ascending: false, nullsFirst: false })
             .limit(50),
           supabase.from("trades").select("id", { head: true, count: "exact" }),
-          supabase
+          supabase.rpc("get_trade_stats"),
+        ]);
+
+        const listError = list.error ?? countRes.error;
+        if (listError) throw new Error(listError.message);
+
+        let rows: StatsRow[];
+        if (rpcRes.error || !rpcRes.data) {
+          if (__DEV__) {
+            console.warn(
+              "[Dashboard] get_trade_stats RPC недоступен, fallback на последние",
+              TRADES_PAGE_SIZE,
+              "сделок:",
+              rpcRes.error?.message,
+            );
+          }
+          const legacy = await supabase
             .from("trades")
             .select(STATS_SELECT)
             .not("closed_at", "is", null)
             .order("closed_at", { ascending: false })
-            .limit(TRADES_PAGE_SIZE),
-        ]);
-
-        const listError = list.error ?? countRes.error ?? statsRes.error;
-        if (listError) throw new Error(listError.message);
+            .limit(TRADES_PAGE_SIZE);
+          if (legacy.error) throw new Error(legacy.error.message);
+          rows = aggregateClosedToStats(
+            (legacy.data ?? []) as unknown as ClosedRow[],
+          );
+        } else {
+          rows = rpcRes.data as unknown as StatsRow[];
+        }
 
         if (!mountedRef.current) return;
 
         setTrades((list.data ?? []) as unknown as TradeRow[]);
-        setClosed((statsRes.data ?? []) as unknown as ClosedRow[]);
+        setStatRows(rows);
         setTotalCount(countRes.count ?? list.data?.length ?? 0);
         setState(
           (countRes.count ?? 0) > 0 || (list.data?.length ?? 0) > 0
@@ -216,16 +292,16 @@ export default function DashboardScreen() {
   const exchanges = useMemo(() => {
     const set = new Set<string>();
     for (const t of trades) set.add(t.exchange);
-    for (const t of closed) set.add(t.exchange);
+    for (const r of statRows) set.add(r.exchange);
     return Array.from(set).sort();
-  }, [trades, closed]);
+  }, [trades, statRows]);
 
-  const filteredClosed = useMemo(
+  const filteredRows = useMemo(
     () =>
       exchangeFilter === "all"
-        ? closed
-        : closed.filter((t) => t.exchange === exchangeFilter),
-    [closed, exchangeFilter],
+        ? statRows
+        : statRows.filter((r) => r.exchange === exchangeFilter),
+    [statRows, exchangeFilter],
   );
 
   const filteredRecent = useMemo(
@@ -249,13 +325,16 @@ export default function DashboardScreen() {
     let grossLoss = 0;
     let fees = 0;
     let funding = 0;
-    for (const t of filteredClosed) {
-      const pnl = tradeNetPnl(t);
-      net += pnl;
-      if (pnl >= 0) grossProfit += pnl;
-      else grossLoss += pnl;
-      fees += t.fee;
-      funding += t.funding;
+    let count = 0;
+    let wins = 0;
+    for (const r of filteredRows) {
+      net += r.net_pnl;
+      grossProfit += r.gross_profit;
+      grossLoss += r.gross_loss;
+      fees += r.fee;
+      funding += r.funding;
+      count += r.trades;
+      wins += r.wins;
     }
     return {
       net,
@@ -263,11 +342,13 @@ export default function DashboardScreen() {
       grossLoss,
       fees,
       funding,
-      winRate: calculateWinRate(filteredClosed),
-      count:
-        exchangeFilter === "all" ? totalCount : filteredClosed.length,
+      // Семантика wins — как на сайте и в RPC: net_pnl > 0.
+      winRate: count > 0 ? (wins / count) * 100 : 0,
+      // При фильтре «все» показываем totalCount (включая открытые
+      // позиции) — это же число гейтит FREE-лимит.
+      count: exchangeFilter === "all" ? totalCount : count,
     };
-  }, [filteredClosed, totalCount, exchangeFilter]);
+  }, [filteredRows, totalCount, exchangeFilter]);
 
   const month = useMemo(() => {
     let net = 0;
@@ -275,19 +356,13 @@ export default function DashboardScreen() {
     let grossLoss = 0;
     let count = 0;
     let wins = 0;
-    for (const t of filteredClosed) {
-      if (t.closed_at == null) continue;
-      const d = new Date(t.closed_at);
-      if (monthKey(d) !== activeMonthKey) continue;
-      const pnl = tradeNetPnl(t);
-      net += pnl;
-      if (pnl >= 0) {
-        grossProfit += pnl;
-        wins += 1;
-      } else {
-        grossLoss += pnl;
-      }
-      count += 1;
+    for (const r of filteredRows) {
+      if (r.month !== activeMonthKey) continue;
+      net += r.net_pnl;
+      grossProfit += r.gross_profit;
+      grossLoss += r.gross_loss;
+      count += r.trades;
+      wins += r.wins;
     }
     return {
       net,
@@ -296,16 +371,14 @@ export default function DashboardScreen() {
       count,
       winRate: count > 0 ? (wins / count) * 100 : 0,
     };
-  }, [filteredClosed, activeMonthKey]);
+  }, [filteredRows, activeMonthKey]);
 
   // ── Ряд для бар-чарта «PnL по месяцам» (последние 6 месяцев) ─────────────
 
   const monthly = useMemo(() => {
     const byMonth = new Map<string, number>();
-    for (const t of filteredClosed) {
-      if (t.closed_at == null) continue;
-      const d = new Date(t.closed_at);
-      byMonth.set(monthKey(d), (byMonth.get(monthKey(d)) ?? 0) + tradeNetPnl(t));
+    for (const r of filteredRows) {
+      byMonth.set(r.month, (byMonth.get(r.month) ?? 0) + r.net_pnl);
     }
 
     // Диапазон графика: от самого старого месяца с данными до текущего.
@@ -337,7 +410,7 @@ export default function DashboardScreen() {
       });
     }
     return series;
-  }, [filteredClosed, now, curMonthKey]);
+  }, [filteredRows, now, curMonthKey]);
 
   /** >6 месяцев — включаем горизонтальный скролл (график «расширяется»). */
   const isWideChart = monthly.length > CHART_MIN_MONTHS;
