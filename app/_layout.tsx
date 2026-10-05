@@ -68,6 +68,7 @@ function RootNavigator() {
       <Stack.Screen name="auth/callback" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="trade/new" />
+      <Stack.Screen name="trade/edit" />
       <Stack.Screen name="paywall" />
       <Stack.Screen name="connections" />
     </Stack>

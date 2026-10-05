@@ -1,10 +1,13 @@
 import { TrendLoader } from "@/components/TrendLoader";
 import { useTrades } from "@/hooks/useTrades";
+import { getSupabase } from "@/services/auth";
 import { fmtDate, fmtPnl, tradeNetPnl } from "@/shared/trade-model";
 import { EXCHANGE_LABELS, type TradeRow } from "@/shared/types";
 import { colors } from "@/theme/colors";
+import { useRouter } from "expo-router";
 import { useCallback, useMemo } from "react";
 import {
+  Alert,
   FlatList,
   StyleSheet,
   Text,
@@ -14,13 +17,76 @@ import {
 
 export default function TradesScreen() {
   const { trades, loading, error, reload } = useTrades();
+  const router = useRouter();
+
+  // ── Действия по тапу на сделку (волна 2: раньше список был read-only).
+  // Семантика — как на сайте: полное редактирование и удаление только
+  // для manual (синканные перезапишет следующий синк), заметки — любым.
+  const confirmDelete = useCallback(
+    (t: TradeRow) => {
+      Alert.alert("Удалить сделку?", `${t.symbol} — действие необратимо.`, [
+        { text: "Отмена", style: "cancel" },
+        {
+          text: "Удалить",
+          style: "destructive",
+          onPress: async () => {
+            const { error: deleteError } = await getSupabase()
+              .from("trades")
+              .delete()
+              .eq("id", t.id);
+            if (deleteError) {
+              Alert.alert("Ошибка", deleteError.message);
+              return;
+            }
+            reload();
+          },
+        },
+      ]);
+    },
+    [reload],
+  );
+
+  const openActions = useCallback(
+    (t: TradeRow) => {
+      const title = `${t.symbol} · ${fmtPnl(tradeNetPnl(t))}`;
+      const message = `${EXCHANGE_LABELS[t.exchange] ?? t.exchange} · ${fmtDate(t.closed_at)}`;
+      if (t.exchange === "manual") {
+        // Android показывает максимум 3 кнопки — ровно столько и кладём.
+        Alert.alert(title, message, [
+          {
+            text: "Редактировать",
+            onPress: () => router.push(`/trade/edit?id=${t.id}`),
+          },
+          {
+            text: "Удалить",
+            style: "destructive",
+            onPress: () => confirmDelete(t),
+          },
+          { text: "Отмена", style: "cancel" },
+        ]);
+      } else {
+        Alert.alert(title, message, [
+          {
+            text: "Изменить заметку",
+            onPress: () => router.push(`/trade/edit?id=${t.id}`),
+          },
+          { text: "Отмена", style: "cancel" },
+        ]);
+      }
+    },
+    [router, confirmDelete],
+  );
 
   const renderItem = useCallback(
     ({ item: t }: { item: TradeRow }) => {
       const net = tradeNetPnl(t);
       const isLong = t.side === "long";
       return (
-        <View style={styles.row}>
+        <TouchableOpacity
+          style={styles.row}
+          activeOpacity={0.7}
+          onPress={() => openActions(t)}
+        >
           <View style={styles.left}>
             <View
               style={[
@@ -57,10 +123,10 @@ export default function TradesScreen() {
           >
             {fmtPnl(net)}
           </Text>
-        </View>
+        </TouchableOpacity>
       );
     },
-    [],
+    [openActions],
   );
 
   const keyExtractor = useCallback((item: TradeRow) => item.id, []);
