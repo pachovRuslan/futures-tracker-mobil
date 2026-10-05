@@ -1,6 +1,7 @@
 import { getAccessToken } from "@/services/auth";
 import { API_URL } from "@/shared/config";
 import type {
+  ApiExchange,
   Connection,
   ConnectionsResponse,
   CreateConnectionPayload,
@@ -107,6 +108,15 @@ function del<T>(path: string): Promise<T> {
 // Connections (требуют сервер — хранение API-ключей бирж)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Ответ GET /api/sync/[exchange]. */
+export interface SyncResponse {
+  ok: boolean;
+  processed?: number;
+  upserted?: number;
+  message?: string;
+  error?: string;
+}
+
 export const api = {
   getConnections: (): Promise<ConnectionsResponse> =>
     request<ConnectionsResponse>(`/api/connections`),
@@ -114,6 +124,13 @@ export const api = {
     post<Connection>("/api/connections", body),
   deleteConnection: (exchange: string): Promise<void> =>
     del(`/api/connections/${exchange}`),
+
+  /** Запустить синк сделок одной биржи (Bearer JWT, премиум-гейт —
+   *  402 PREMIUM_REQUIRED ловится вызывающим экраном через
+   *  isPremiumRequired). Может выполняться до ~60 секунд — это
+   *  серверный maxDuration роута синка. */
+  syncExchange: (exchange: ApiExchange): Promise<SyncResponse> =>
+    request<SyncResponse>(`/api/sync/${exchange}?days=365`),
 };
 
 export { ApiError };

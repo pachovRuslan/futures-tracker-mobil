@@ -13,6 +13,7 @@ import { colors } from "@/theme/colors";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
@@ -35,6 +36,10 @@ export default function ConnectionsScreen() {
   const [apiSecret, setApiSecret] = useState("");
   const [passphrase, setPassphrase] = useState("");
   const [saving, setSaving] = useState(false);
+  /** Идентификатор активного синка: биржа или "all"; null — не идёт. */
+  const [syncing, setSyncing] = useState<string | null>(null);
+  /** Строка статуса синка (прогресс/итог) под кнопкой «Синк все». */
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const mountedRef = useRef(true);
 
   // Bitget (схема key+secret+passphrase) требует третье поле — без него
@@ -156,6 +161,105 @@ export default function ConnectionsScreen() {
     ]);
   };
 
+  // ── Ручной запуск синка (волна 2) ─────────────────────────────────────────
+  // Раньше мобилка вообще не умела запускать синк: только суточный cron
+  // сайта (00:00 UTC) или кнопка на сайте. Здесь — как на вебе: синк
+  // идёт от имени сервера с сохранёнными ключами, до 60 секунд на биржу.
+
+  const premiumAlert = () => {
+    Alert.alert(
+      "Требуется Premium",
+      "Подключения бирж и авто-синк доступны по подписке Premium.",
+      [
+        { text: "Позже", style: "cancel" },
+        {
+          text: "Перейти на Premium",
+          onPress: () => router.push("/paywall"),
+        },
+      ],
+    );
+  };
+
+  const syncOne = async (ex: ApiExchange): Promise<void> => {
+    if (syncing) return;
+    setSyncing(ex);
+    setSyncMsg(`Синк ${EXCHANGE_LABELS[ex]}…`);
+    try {
+      const data = await api.syncExchange(ex);
+      if (!mountedRef.current) return;
+      if (data.ok) {
+        setSyncMsg(
+          `${EXCHANGE_LABELS[ex]}: обновлено ${data.upserted ?? 0} записей`,
+        );
+      } else {
+        setSyncMsg(
+          `${EXCHANGE_LABELS[ex]}: ${data.error ?? data.message ?? "не удалось"}`,
+        );
+      }
+    } catch (e) {
+      if (!mountedRef.current) return;
+      if (isPremiumRequired(e)) {
+        setSyncMsg(null);
+        premiumAlert();
+        return;
+      }
+      setSyncMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (mountedRef.current) setSyncing(null);
+    }
+  };
+
+  const syncAll = async (): Promise<void> => {
+    if (syncing) return;
+    const connected = connections
+      .map((c) => c.exchange)
+      .filter((ex) => EXCHANGES.includes(ex));
+    if (connected.length === 0) {
+      setSyncMsg("Нет подключённых бирж — добавьте ключ ниже.");
+      return;
+    }
+
+    setSyncing("all");
+    let upserted = 0;
+    const errors: string[] = [];
+    try {
+      for (let i = 0; i < connected.length; i++) {
+        const ex = connected[i];
+        setSyncMsg(
+          `Синк: ${EXCHANGE_LABELS[ex]} (${i + 1}/${connected.length})…`,
+        );
+        try {
+          const data = await api.syncExchange(ex);
+          if (data.ok) {
+            upserted += data.upserted ?? 0;
+          } else {
+            errors.push(`${EXCHANGE_LABELS[ex]}: ${data.error ?? "сбой"}`);
+          }
+        } catch (e) {
+          // Гейт сработал посреди последовательности — обрываем всё.
+          if (isPremiumRequired(e)) {
+            if (mountedRef.current) setSyncMsg(null);
+            premiumAlert();
+            return;
+          }
+          errors.push(
+            `${EXCHANGE_LABELS[ex]}: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      }
+      if (!mountedRef.current) return;
+      if (errors.length === 0) {
+        setSyncMsg(`Готово — обновлено ${upserted} записей`);
+      } else {
+        setSyncMsg(
+          `Обновлено ${upserted} записей. Ошибки: ${errors.join("; ")}`,
+        );
+      }
+    } finally {
+      if (mountedRef.current) setSyncing(null);
+    }
+  };
+
   if (loading && connections.length === 0) {
     return (
       <View style={styles.center}>
@@ -179,6 +283,32 @@ export default function ConnectionsScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Ручной синк: кнопка «все» + статусная строка. Свежие сделки
+          появятся на дашборде при возврате (он перезагружается по фокусу). */}
+      {connections.length > 0 && (
+        <View style={styles.syncBox}>
+          <TouchableOpacity
+            style={[
+              styles.syncButton,
+              syncing && styles.syncButtonDisabled,
+            ]}
+            onPress={syncAll}
+            disabled={syncing != null}
+          >
+            {syncing === "all" ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : (
+              <>
+                <Ionicons name="sync" size={14} color={colors.accent} />
+                <Text style={styles.syncButtonText}>Синк все биржи</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          {syncMsg && <Text style={styles.syncMsg}>{syncMsg}</Text>}
+        </View>
+      )}
+
       {EXCHANGES.map((ex) => {
         const conn = connections.find((c) => c.exchange === ex);
         return (
@@ -195,9 +325,27 @@ export default function ConnectionsScreen() {
               )}
             </View>
             {conn && (
-              <TouchableOpacity onPress={() => disconnect(ex)}>
-                <Text style={styles.disconnect}>Отключить</Text>
-              </TouchableOpacity>
+              <View style={styles.rowActions}>
+                <TouchableOpacity
+                  style={styles.syncIconButton}
+                  onPress={() => syncOne(ex)}
+                  disabled={syncing != null}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  {syncing === ex ? (
+                    <ActivityIndicator size="small" color={colors.accent} />
+                  ) : (
+                    <Ionicons
+                      name="sync"
+                      size={16}
+                      color={syncing ? colors.textFaint : colors.textMuted}
+                    />
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => disconnect(ex)}>
+                  <Text style={styles.disconnect}>Отключить</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         );
@@ -349,6 +497,32 @@ const styles = StyleSheet.create({
   connected: { fontSize: 11, color: colors.profit },
   notConnected: { fontSize: 11, color: colors.textFaint, marginTop: 4 },
   disconnect: { fontSize: 12, color: colors.loss },
+  syncBox: { marginBottom: 12, gap: 8 },
+  syncButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: colors.surface,
+  },
+  syncButtonDisabled: { opacity: 0.5 },
+  syncButtonText: { color: colors.accent, fontSize: 13, fontWeight: "600" },
+  syncMsg: {
+    fontSize: 12,
+    color: colors.textMuted,
+    lineHeight: 16,
+  },
+  rowActions: { flexDirection: "row", alignItems: "center", gap: 14 },
+  syncIconButton: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   form: { gap: 14 },
   fieldLabel: {
     fontSize: 11,
