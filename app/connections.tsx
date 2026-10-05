@@ -4,7 +4,11 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { api, isPremiumRequired } from "@/services/api";
 import { EXCHANGE_CONNECTIONS_ENABLED } from "@/shared/config";
 import type { ApiExchange, Connection } from "@/shared/types";
-import { EXCHANGES, EXCHANGE_LABELS } from "@/shared/types";
+import {
+  EXCHANGES,
+  EXCHANGE_LABELS,
+  needsPassphrase,
+} from "@/shared/types";
 import { colors } from "@/theme/colors";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -29,8 +33,13 @@ export default function ConnectionsScreen() {
   const [exchange, setExchange] = useState<ApiExchange>(EXCHANGES[0]);
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
+  const [passphrase, setPassphrase] = useState("");
   const [saving, setSaving] = useState(false);
   const mountedRef = useRef(true);
+
+  // Bitget (схема key+secret+passphrase) требует третье поле — без него
+  // бэкенд отвечает 400 «требует passphrase — укажите третье поле».
+  const passRequired = needsPassphrase(exchange);
 
   // ⚠️ Флаг функции: пока EXCHANGE_CONNECTIONS_ENABLED выключен, экран
   // закрыт даже для премиума, в т.ч. для прямого deep link (kill-switch
@@ -92,12 +101,18 @@ export default function ConnectionsScreen() {
   }, [entitlementLoading, isPremium, load]);
 
   const submit = async () => {
-    if (!apiKey || !apiSecret) return;
+    if (!apiKey || !apiSecret || (passRequired && !passphrase)) return;
     setSaving(true);
     try {
-      await api.addConnection({ exchange, apiKey, apiSecret });
+      await api.addConnection({
+        exchange,
+        apiKey,
+        apiSecret,
+        ...(passRequired ? { passphrase } : {}),
+      });
       setApiKey("");
       setApiSecret("");
+      setPassphrase("");
       await load();
     } catch (e) {
       // Серверный премиум-гейт (волна 1): 402 вместо тихого обхода.
@@ -206,7 +221,12 @@ export default function ConnectionsScreen() {
                     styles.exchangeChip,
                     selected && styles.exchangeChipActive,
                   ]}
-                  onPress={() => setExchange(ex)}
+                  onPress={() => {
+                    setExchange(ex);
+                    // Прошлый passphrase не должен «залипнуть» при
+                    // переключении на биржу без третьего ключа.
+                    setPassphrase("");
+                  }}
                 >
                   <Text
                     style={[
@@ -249,13 +269,39 @@ export default function ConnectionsScreen() {
           />
         </View>
 
+        {passRequired && (
+          <View>
+            <Text style={styles.fieldLabel}>Passphrase</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Третий ключ из API-настроек Bitget"
+              placeholderTextColor={colors.textFaint}
+              value={passphrase}
+              onChangeText={setPassphrase}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <Text style={styles.fieldHint}>
+              {EXCHANGE_LABELS[exchange]} выдаёт три ключа при создании
+              API-ключа: Key, Secret и Passphrase.
+            </Text>
+          </View>
+        )}
+
         <TouchableOpacity
           style={[
             styles.button,
-            (saving || !apiKey || !apiSecret) && styles.buttonDisabled,
+            (saving ||
+              !apiKey ||
+              !apiSecret ||
+              (passRequired && !passphrase)) &&
+              styles.buttonDisabled,
           ]}
           onPress={submit}
-          disabled={saving || !apiKey || !apiSecret}
+          disabled={
+            saving || !apiKey || !apiSecret || (passRequired && !passphrase)
+          }
         >
           <Text style={styles.buttonText}>
             {saving ? "Проверка..." : "Сохранить"}
@@ -345,6 +391,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  fieldHint: {
+    fontSize: 11,
+    color: colors.textFaint,
+    marginTop: 6,
+    lineHeight: 15,
   },
   button: {
     backgroundColor: colors.accent,

@@ -138,10 +138,25 @@ export interface Connection {
   created_at: string; // ISO timestamp
 }
 
+/** Биржи, для подключения которых нужен третий ключ — passphrase.
+ *  Источник истины — credentialsSchema адаптеров на сайте
+ *  (lib/exchanges/*): сейчас это только Bitget (key+secret+passphrase). */
+export const EXCHANGES_WITH_PASSPHRASE = ["bitget"] as const;
+
+export type PassphraseExchange = (typeof EXCHANGES_WITH_PASSPHRASE)[number];
+
+/** Для этой биржи в форме подключения нужно третье поле Passphrase. */
+export function needsPassphrase(exchange: ApiExchange): boolean {
+  return (EXCHANGES_WITH_PASSPHRASE as readonly string[]).includes(exchange);
+}
+
 export interface CreateConnectionPayload {
   exchange: ApiExchange;
   apiKey: string;
   apiSecret: string;
+  /** Обязателен для бирж со схемой key+secret+passphrase (Bitget):
+   *  бэкенд отвечает 400, если поле не передано. */
+  passphrase?: string;
 }
 
 export interface ConnectionsResponse {
