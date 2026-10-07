@@ -79,18 +79,103 @@ CREATE POLICY "users_select_own_entitlements"
   USING (user_id = auth.uid());
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 3. RPC get_my_entitlement
+-- 3. Premium-статус: allowed_emails + ft_is_effective_premium + get_my_entitlement
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- 3a. Таблица allowlist-а сайта (источник правды о входе и премиуме).
+-- Точная копия миграции 06 сайта (prod-форма: PK = email).
+CREATE TABLE IF NOT EXISTS public.allowed_emails (
+  email    TEXT PRIMARY KEY,
+  added_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  added_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  note     TEXT
+);
+
+ALTER TABLE public.allowed_emails ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone authenticated can read allowlist" ON public.allowed_emails;
+CREATE POLICY "Anyone authenticated can read allowlist"
+  ON public.allowed_emails FOR SELECT TO authenticated
+  USING (true);
+
+-- 3b. «Эффективный премиум» — единая функция-источник правды (миграция 10
+-- сайта). Премиум = is_premium (не истёк) OR is_allowlisted OR email
+-- в allowed_emails.
+CREATE OR REPLACE FUNCTION public.ft_is_effective_premium(p_user_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT
+    COALESCE(
+      (
+        SELECT e.is_premium AND (e.expires_at IS NULL OR e.expires_at > now())
+        FROM public.user_entitlements e
+        WHERE e.user_id = p_user_id
+      ),
+      false
+    )
+    OR COALESCE(
+      (
+        SELECT e.is_allowlisted
+        FROM public.user_entitlements e
+        WHERE e.user_id = p_user_id
+      ),
+      false
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM public.allowed_emails a
+      JOIN auth.users u ON lower(u.email) = lower(a.email)
+      WHERE u.id = p_user_id
+    );
+$$;
+
+REVOKE ALL ON FUNCTION public.ft_is_effective_premium(UUID) FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.ft_is_effective_premium(UUID) TO authenticated;
+
+-- 3c. RPC для мобильного приложения (миграция 12). LEFT JOIN от auth.users:
+-- ровно одна строка для залогиненного юзера (даже без записи в
+-- user_entitlements), плюс вычисленный is_effective_premium. Приложение
+-- читает его; при отсутствии поля (старая БД) — fallback на is_premium.
+-- DROP обязателен: возвращаемый тип меняется (SETOF → TABLE), Postgres
+-- не позволяет это через CREATE OR REPLACE (ошибка 42P13).
+DROP FUNCTION IF EXISTS public.get_my_entitlement();
+
 CREATE OR REPLACE FUNCTION public.get_my_entitlement()
-RETURNS SETOF public.user_entitlements
+RETURNS TABLE (
+  user_id              UUID,
+  email                TEXT,
+  is_premium           BOOLEAN,
+  is_allowlisted       BOOLEAN,
+  is_effective_premium BOOLEAN,
+  granted_by           TEXT,
+  granted_at           TIMESTAMPTZ,
+  expires_at           TIMESTAMPTZ,
+  note                 TEXT
+)
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT * FROM public.user_entitlements WHERE user_id = auth.uid();
+  SELECT
+    u.id,
+    u.email,
+    COALESCE(e.is_premium, false),
+    COALESCE(e.is_allowlisted, false),
+    public.ft_is_effective_premium(u.id),
+    e.granted_by,
+    e.granted_at,
+    e.expires_at,
+    e.note
+  FROM auth.users u
+  LEFT JOIN public.user_entitlements e ON e.user_id = u.id
+  WHERE u.id = auth.uid()
 $$;
 
+REVOKE ALL ON FUNCTION public.get_my_entitlement() FROM public, anon;
 GRANT EXECUTE ON FUNCTION public.get_my_entitlement() TO authenticated;
 
 -- ─────────────────────────────────────────────────────────────────────────────

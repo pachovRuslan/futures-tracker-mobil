@@ -12,8 +12,15 @@ const EMPTY: Entitlement = {
 /**
  * Получение entitlement пользователя из БД через Supabase RPC.
  *
- * RPC get_my_entitlement() объявлен как SECURITY DEFINER и возвращает
- * запись из public.user_entitlements для текущего auth.uid().
+ * RPC get_my_entitlement() (миграция 12) объявлен как SECURITY DEFINER,
+ * LEFT JOIN-ит auth.users и возвращает ровно одну строку для текущего
+ * auth.uid() — включая юзеров без записи в user_entitlements.
+ *
+ * Ключевое поле — is_effective_premium: сервер вычисляет его той же
+ * функцией ft_is_effective_premium(), что использует сайт:
+ *   is_premium (не истёк) OR is_allowlisted OR email в allowed_emails.
+ * Единая правда для обеих платформ — до этого клиент считал только
+ * is_premium, и allowlist-юзеры сайта видели в приложении пейволл.
  */
 export async function fetchEntitlement(): Promise<Entitlement> {
   try {
@@ -42,6 +49,14 @@ export async function fetchEntitlement(): Promise<Entitlement> {
     const isExpired =
       row.expires_at && new Date(row.expires_at).getTime() < Date.now();
 
+    // «Эффективный премиум» от сервера (миграция 12). Fallback — старая
+    // форма ответа (до миграции поле отсутствует → undefined): считаем
+    // сами по is_premium и сроку. Порядок деплоя SQL/клиента не важен.
+    const isPremium =
+      typeof row.is_effective_premium === "boolean"
+        ? row.is_effective_premium
+        : Boolean(row.is_premium) && !isExpired;
+
     // Источник премиума: покупки пишут granted_by = 'revenuecat:<store>',
     // ручные выдачи — что-то другое (или пусто). От этого зависит, куда
     // пейволл отправит управлять подпиской.
@@ -54,7 +69,7 @@ export async function fetchEntitlement(): Promise<Entitlement> {
     }
 
     return {
-      isPremium: Boolean(row.is_premium) && !isExpired,
+      isPremium,
       isAllowlisted: Boolean(row.is_allowlisted),
       expiresAt: row.expires_at ? new Date(row.expires_at) : null,
       note: row.note ?? null,
