@@ -132,6 +132,53 @@ CREATE POLICY "users_update_own_balance"
   USING (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
 
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 5. RPC get_trade_stats — агрегаты биржа × месяц для дашборда
+--    (миграция 11; без него дашборд молча падает в fallback-расчёт
+--    по последним 500 сделкам — итог занижается при длинной истории)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION public.get_trade_stats()
+RETURNS TABLE (
+  exchange     TEXT,
+  month        TEXT,
+  trades       BIGINT,
+  wins         BIGINT,
+  net_pnl      NUMERIC,
+  gross_profit NUMERIC,
+  gross_loss   NUMERIC,
+  fee          NUMERIC,
+  funding      NUMERIC
+)
+LANGUAGE SQL
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT
+    t.exchange,
+    to_char(t.closed_at AT TIME ZONE 'UTC', 'YYYY-MM') AS month,
+    count(*) AS trades,
+    count(*) FILTER (WHERE (t.realized_pnl - t.fee + t.funding) > 0) AS wins,
+    sum(t.realized_pnl - t.fee + t.funding) AS net_pnl,
+    sum(CASE WHEN (t.realized_pnl - t.fee + t.funding) > 0
+             THEN (t.realized_pnl - t.fee + t.funding) ELSE 0 END) AS gross_profit,
+    sum(CASE WHEN (t.realized_pnl - t.fee + t.funding) < 0
+             THEN (t.realized_pnl - t.fee + t.funding) ELSE 0 END) AS gross_loss,
+    sum(t.fee) AS fee,
+    sum(t.funding) AS funding
+  FROM public.trades t
+  WHERE t.closed_at IS NOT NULL
+    AND t.user_id = auth.uid()
+  GROUP BY
+    t.exchange,
+    to_char(t.closed_at AT TIME ZONE 'UTC', 'YYYY-MM')
+  ORDER BY 1, 2;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_trade_stats() FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.get_trade_stats() TO authenticated;
+
 DROP POLICY IF EXISTS "users_delete_own_balance" ON public.balance_snapshots;
 CREATE POLICY "users_delete_own_balance"
   ON public.balance_snapshots FOR DELETE TO authenticated
