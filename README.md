@@ -53,7 +53,8 @@ EXPO_PUBLIC_REVENUECAT_IOS_KEY=appl_xxxxxxxxxxxxxxxx
    `REVENUECAT_ENTITLEMENT_ID=premium` — их использует
    `/api/billing/sync-entitlement`.
 
-Подробнее — в инструкции к патчу волны 1 (WAVE1-APPLY.md).
+Подробнее про серверные переменные биллинга — в `.env.example`
+репозитория сайта (futures-tracker).
 
 ## Настройка Supabase
 

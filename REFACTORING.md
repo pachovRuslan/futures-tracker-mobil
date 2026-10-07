@@ -159,6 +159,9 @@ app/paywall.tsx                 честный список фич
 2. **Google Cloud Console** → OAuth-клиент (Web application) → Authorized redirect URIs должен содержать `https://<project-ref>.supabase.co/auth/v1/callback`.
 3. **Выполнить `docs/supabase.sql`** (если ещё не), включая RPC `get_my_entitlement` — без него `useSubscription` всегда видит FREE.
 4. **Решить судьбу `/api/connections`**: на текущем бэкенде его нет (307 → /login). Либо имплементировать (хранение API-ключей бирж — оправданный серверный код), либо временно скрыть экран «Подключения».
+   > ✅ Обновление (2026-10-07): resolved — на сайте реализованы `/api/connections`,
+   > `/api/sync/[exchange]` и Bearer-JWT-мост для мобилки (коммит «Bearer-JWT
+   > auth for mobile API bridge»). Пункт оставлен как история аудита.
 5. Создать `.env` из `.env.example` и перезапустить `expo start --clear`.
 
 ## 8. Рекомендации (roadmap)

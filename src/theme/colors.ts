@@ -34,5 +34,3 @@ export const colors = {
   /** Цвет кнопки Google OAuth. */
   googleBlue: "#4285F4",
 } as const;
-
-export type ColorName = keyof typeof colors;

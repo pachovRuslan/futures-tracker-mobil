@@ -2,7 +2,6 @@ import { getAccessToken } from "@/services/auth";
 import {
   API_URL,
   getRevenueCatApiKey,
-  REVENUECAT_ENTITLEMENT_ID,
 } from "@/shared/config";
 import Purchases, {
   LOG_LEVEL,
@@ -103,11 +102,6 @@ export async function purchasePremium(
 /** «Восстановить покупки» — обязательная кнопка для App Store. */
 export async function restorePremium(): Promise<CustomerInfo> {
   return Purchases.restorePurchases();
-}
-
-/** Активен ли entitlement Premium в переданном CustomerInfo. */
-export function hasActivePremiumEntitlement(info: CustomerInfo): boolean {
-  return Boolean(info.entitlements.active[REVENUECAT_ENTITLEMENT_ID]);
 }
 
 /**

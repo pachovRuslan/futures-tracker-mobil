@@ -43,9 +43,6 @@ export const REVENUECAT_IOS_KEY =
 export const REVENUECAT_ANDROID_KEY =
   process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ?? "";
 
-/** Идентификатор entitlement в RevenueCat (Products → Entitlements). */
-export const REVENUECAT_ENTITLEMENT_ID = "premium";
-
 /** SDK-ключ RC для текущей платформы; null — биллинг не сконфигурирован. */
 export function getRevenueCatApiKey(): string | null {
   if (Platform.OS === "ios") return REVENUECAT_IOS_KEY || null;
