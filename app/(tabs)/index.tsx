@@ -193,10 +193,13 @@ export default function DashboardScreen() {
     return colors.textMuted;
   }, [allTime.net]);
 
+  // Бейдж: PREMIUM · GRANT — ручная выдача, PREMIUM — подписка RC.
+  // Ветки «allowlist» (PREMIUM · BETA) больше нет: с миграции 13 allowlist
+  // премиум не даёт, source у премиума всегда app_store/play_store/manual
+  // (см. src/services/entitlements.ts).
   const premiumBadgeText = useMemo(() => {
     if (subLoading) return "…";
     if (!isPremium) return "FREE";
-    if (entitlement?.source === "allowlist") return "PREMIUM · BETA";
     if (entitlement?.source === "manual") return "PREMIUM · GRANT";
     return "PREMIUM";
   }, [isPremium, entitlement, subLoading]);

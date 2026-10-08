@@ -60,13 +60,19 @@ export async function fetchEntitlement(): Promise<Entitlement> {
         ? row.is_effective_premium
         : Boolean(row.is_premium) && !isExpired;
 
-    // Источник премиума: покупки пишут granted_by = 'revenuecat:<store>',
-    // ручные выдачи — что-то другое (или пусто). От этого зависит, куда
-    // пейволл отправит управлять подпиской.
+    // Источник статуса (миг 13: allow = вход, premium = подписка):
+    //   подписка RC      -> granted_by = 'revenuecat:<store>' -> app_store / play_store;
+    //   премиум без RC   -> ручная выдача -> manual (даже если юзер заодно
+    //                       в allowlist — is_allowlisted источник премиума
+    //                       больше не является);
+    //   FREE + приглашён -> allowlist (для бейджа значения не имеет);
+    //   FREE, открытая регистрация -> none.
     const grantedBy = typeof row.granted_by === "string" ? row.granted_by : "";
-    let source: Entitlement["source"] = "manual";
+    let source: Entitlement["source"] = "none";
     if (grantedBy.startsWith("revenuecat:")) {
       source = grantedBy.includes("app_store") ? "app_store" : "play_store";
+    } else if (isPremium) {
+      source = "manual";
     } else if (row.is_allowlisted) {
       source = "allowlist";
     }
