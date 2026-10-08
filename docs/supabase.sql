@@ -82,7 +82,8 @@ CREATE POLICY "users_select_own_entitlements"
 -- 3. Premium-статус: allowed_emails + ft_is_effective_premium + get_my_entitlement
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- 3a. Таблица allowlist-а сайта (источник правды о входе и премиуме).
+-- 3a. Таблица allowlist-а сайта (источник правды о ВХОДЕ; премиумом
+-- с миграции 13 не является).
 -- Точная копия миграции 06 сайта (prod-форма: PK = email).
 CREATE TABLE IF NOT EXISTS public.allowed_emails (
   email    TEXT PRIMARY KEY,
@@ -99,8 +100,11 @@ CREATE POLICY "Anyone authenticated can read allowlist"
   USING (true);
 
 -- 3b. «Эффективный премиум» — единая функция-источник правды (миграция 10
--- сайта). Премиум = is_premium (не истёк) OR is_allowlisted OR email
--- в allowed_emails.
+-- сайта; после миграции 13 allow/premium разделены). Премиум = ТОЛЬКО
+-- is_premium (не истёк): подписка RevenueCat или ручная выдача.
+-- Allowlist премиумом больше не считается — приглашённые освобождены
+-- от FREE-лимита 50 сделок отдельной веткой триггера
+-- enforce_free_trade_limit на сайте (миграция 13).
 CREATE OR REPLACE FUNCTION public.ft_is_effective_premium(p_user_id UUID)
 RETURNS BOOLEAN
 LANGUAGE sql
@@ -116,20 +120,6 @@ AS $$
         WHERE e.user_id = p_user_id
       ),
       false
-    )
-    OR COALESCE(
-      (
-        SELECT e.is_allowlisted
-        FROM public.user_entitlements e
-        WHERE e.user_id = p_user_id
-      ),
-      false
-    )
-    OR EXISTS (
-      SELECT 1
-      FROM public.allowed_emails a
-      JOIN auth.users u ON lower(u.email) = lower(a.email)
-      WHERE u.id = p_user_id
     );
 $$;
 
