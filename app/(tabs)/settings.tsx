@@ -1,7 +1,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { getSupabase } from "@/services/auth";
-import { resetPurchases } from "@/services/purchases";
+import { resetPurchases, syncEntitlementToServer } from "@/services/purchases";
 import {
   EXCHANGE_CONNECTIONS_ENABLED,
   PRIVACY_POLICY_URL,
@@ -22,9 +22,11 @@ import {
 
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
-  const { isPremium, loading: subLoading } = useSubscription();
+  const { isPremium, loading: subLoading, refresh: refreshSubscription } =
+    useSubscription();
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
+  const [debugSyncing, setDebugSyncing] = useState(false);
 
   // ─── Удаление аккаунта (Google Play Account Deletion / App Review 5.1.1(v)) ──
   //
@@ -74,6 +76,38 @@ export default function SettingsScreen() {
     );
   };
 
+  // ─── DEV: ручная сверка подписки (тестирование биллинга) ─────────────────
+  //
+  // Гоняет всю цепочку принудительно: RevenueCat → POST sync-entitlement →
+  // user_entitlements → refresh(true) (обход 60-секундного кэша). Есть
+  // только в dev-сборках — __DEV__ вырезается из прод-бандла. Сценарии:
+  // после тестовой покупки/отмены на internal-треке, после ручной выдачи
+  // в SQL. Тест-план целиком — docs/BILLING.md.
+  const debugSyncSubscription = async () => {
+    if (debugSyncing) return;
+    setDebugSyncing(true);
+    try {
+      let rcPremium: boolean | null = null;
+      let syncError: string | null = null;
+      try {
+        rcPremium = await syncEntitlementToServer();
+      } catch (e) {
+        syncError = e instanceof Error ? e.message : String(e);
+      }
+      // Статус перечитываем и при ошибке сверки: ручная выдача и
+      // allowlist живут в user_entitlements, RC для них не нужен.
+      await refreshSubscription(true).catch(() => {});
+      Alert.alert(
+        "Сверка подписки",
+        syncError != null
+          ? `Сервер/RC недоступны (${syncError}).\nСтатус перечитан из user_entitlements — смотрите бейдж.`
+          : `RevenueCat: premium=${rcPremium ? "true" : "false"}.\nСтатус в приложении обновлён — смотрите бейдж.`,
+      );
+    } finally {
+      setDebugSyncing(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.card}>
@@ -94,6 +128,23 @@ export default function SettingsScreen() {
           onPress={() => router.push("/paywall")}
         >
           <Text style={styles.upgradeText}>Перейти на Premium</Text>
+        </TouchableOpacity>
+      )}
+
+      {__DEV__ && (
+        <TouchableOpacity
+          style={styles.debugMenuItem}
+          onPress={debugSyncSubscription}
+          disabled={debugSyncing}
+        >
+          <Text style={styles.debugMenuText}>
+            DEV · Сверить подписку с магазином
+          </Text>
+          {debugSyncing ? (
+            <ActivityIndicator size="small" color={colors.accent} />
+          ) : (
+            <Text style={styles.arrow}>→</Text>
+          )}
         </TouchableOpacity>
       )}
 
@@ -185,6 +236,19 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   upgradeText: { color: "#fff", fontSize: 14, fontWeight: "600" },
+  debugMenuItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: "dashed",
+  },
+  debugMenuText: { fontSize: 12, color: colors.textMuted },
   menuItem: {
     flexDirection: "row",
     justifyContent: "space-between",

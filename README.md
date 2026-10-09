@@ -52,6 +52,9 @@ EXPO_PUBLIC_REVENUECAT_IOS_KEY=appl_xxxxxxxxxxxxxxxx
 4. На сайте задайте `REVENUECAT_SECRET_API_KEY` (v1 secret key `sk_...`) и
    `REVENUECAT_ENTITLEMENT_ID=premium` — их использует
    `/api/billing/sync-entitlement`.
+5. Пошаговая настройка сторов (Google Play: продукты, internal-трек,
+   license-тестеры), сборок с ключами и полный тест-план покупок —
+   **docs/BILLING.md**.
 
 Подробнее про серверные переменные биллинга — в `.env.example`
 репозитория сайта (futures-tracker).
