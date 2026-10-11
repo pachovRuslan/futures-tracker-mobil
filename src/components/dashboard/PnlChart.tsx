@@ -1,7 +1,8 @@
 import { CHART_MIN_MONTHS } from "@/hooks/useDashboardStats";
 import { plural } from "@/shared/format";
 import { fmtPnl } from "@/shared/trade-model";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { useMemo, useRef } from "react";
 import {
   Pressable,
@@ -41,6 +42,8 @@ export function PnlChart({
   onSelectMonth,
   tradesCount,
 }: PnlChartProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   /** >6 месяцев — включаем горизонтальный скролл (график «расширяется»). */
   const isWideChart = monthly.length > CHART_MIN_MONTHS;
   const chartScrollRef = useRef<ScrollView>(null);
@@ -146,7 +149,7 @@ export function PnlChart({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   chartCard: {
     backgroundColor: colors.surface,
     borderRadius: 8,

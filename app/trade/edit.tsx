@@ -5,7 +5,8 @@ import { TrendLoader } from "@/components/TrendLoader";
 import { useEditableTrade } from "@/hooks/useEditableTrade";
 import { useTradeMutations } from "@/hooks/useTradeMutations";
 import { formatUserDateTime } from "@/shared/datetime";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
   ScrollView,
@@ -32,6 +33,8 @@ import {
  * TradeNotesForm. Здесь осталось: ранние состояния и раскладка.
  */
 export default function EditTradeScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
 
@@ -113,7 +116,7 @@ export default function EditTradeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: 16, paddingBottom: 32, gap: 4 },
   center: {

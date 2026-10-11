@@ -1,4 +1,5 @@
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 interface PremiumBannerProps {
@@ -14,6 +15,8 @@ interface PremiumBannerProps {
  * перенесены без изменений.
  */
 export function PremiumBanner({ onPress }: PremiumBannerProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <Pressable
       style={styles.premiumCard}
@@ -31,7 +34,7 @@ export function PremiumBanner({ onPress }: PremiumBannerProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   premiumCard: {
     flexDirection: "row",
     alignItems: "center",

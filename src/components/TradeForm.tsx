@@ -1,6 +1,7 @@
 import { nowUserDateTime, parseUserDateTime } from "@/shared/datetime";
 import type { TradeSide } from "@/shared/types";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -120,6 +121,8 @@ function DateTimeField({
   onChange: (v: string) => void;
   placeholder: string;
 }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
@@ -152,6 +155,8 @@ export function TradeForm({
   onSubmit,
   submitDisabled,
 }: TradeFormProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const [symbol, setSymbol] = useState(initial?.symbol ?? "");
   const [side, setSide] = useState<TradeSide>(initial?.side ?? "long");
   const [qty, setQty] = useState(initial?.qty ?? "");
@@ -336,7 +341,7 @@ export function TradeForm({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   field: { gap: 6 },
   fieldRow: { flexDirection: "row", gap: 12 },
   label: {

@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { fmtDate, fmtPnl, tradeNetPnl } from "@/shared/trade-model";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { EXCHANGE_LABELS } from "@/shared/types";
 import type { TradeRow } from "@/shared/types";
@@ -16,6 +17,8 @@ interface RecentTradesProps {
  * разметка и стили перенесены без изменений.
  */
 export function RecentTrades({ trades }: RecentTradesProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const router = useRouter();
 
   return (
@@ -105,7 +108,7 @@ export function RecentTrades({ trades }: RecentTradesProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   section: { gap: 8 },
   sectionHeader: {
     flexDirection: "row",

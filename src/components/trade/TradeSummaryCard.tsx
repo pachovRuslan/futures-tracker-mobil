@@ -1,7 +1,8 @@
 import { fmtDate, fmtPnl, tradeNetPnl } from "@/shared/trade-model";
 import { EXCHANGE_LABELS } from "@/shared/types";
 import type { TradeRow } from "@/shared/types";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { StyleSheet, Text, View } from "react-native";
 
 interface TradeSummaryCardProps {
@@ -18,6 +19,8 @@ interface TradeSummaryCardProps {
  * перенесены без изменений.
  */
 export function TradeSummaryCard({ trade }: TradeSummaryCardProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <View style={styles.summary}>
       <View style={styles.summaryRow}>
@@ -42,7 +45,7 @@ export function TradeSummaryCard({ trade }: TradeSummaryCardProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   summary: {
     backgroundColor: colors.surface,
     borderRadius: 8,

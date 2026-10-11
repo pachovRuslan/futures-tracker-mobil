@@ -22,8 +22,15 @@ export default function Root({ children }: { children: ReactNode }) {
   );
 }
 
-// Совпадает с colors.bg из src/theme/colors.ts — избегает белой вспышки.
+// Фон web-оболочки = colors.bg (тёмная тема); светлая подхватывается
+// системным prefers-color-scheme — избегает белой вспышки до гидрации.
+// Приложение на web перерисует фон само, как только смонтируется ThemeProvider.
 const responsiveBackground = `
 body {
   background-color: #0a0d12;
+}
+@media (prefers-color-scheme: light) {
+  body {
+    background-color: #f4f6f9;
+  }
 }`;

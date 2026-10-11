@@ -2,7 +2,8 @@ import { BalanceForm } from "@/components/balance/BalanceForm";
 import { BalanceRow } from "@/components/balance/BalanceRow";
 import { TrendLoader } from "@/components/TrendLoader";
 import { useBalanceSnapshots } from "@/hooks/useBalanceSnapshots";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 /**
@@ -18,6 +19,8 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-nati
  * BalanceForm, карточка снапшота — BalanceRow.
  */
 export default function BalanceScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const { snapshots, loading, error, load, confirmDelete } =
     useBalanceSnapshots();
 
@@ -78,7 +81,7 @@ export default function BalanceScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   center: {
     flex: 1,

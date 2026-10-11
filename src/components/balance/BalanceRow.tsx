@@ -1,5 +1,6 @@
 import type { BalanceSnapshot } from "@/shared/types";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 interface BalanceRowProps {
@@ -16,6 +17,8 @@ interface BalanceRowProps {
  * задержка long-press и стили перенесены без изменений.
  */
 export function BalanceRow({ snapshot: s, onDelete }: BalanceRowProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <TouchableOpacity
       style={styles.row}
@@ -31,7 +34,7 @@ export function BalanceRow({ snapshot: s, onDelete }: BalanceRowProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   row: {
     flexDirection: "row",
     justifyContent: "space-between",

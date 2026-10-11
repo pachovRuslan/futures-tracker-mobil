@@ -1,4 +1,5 @@
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { PACKAGE_TYPE, type PurchasesPackage } from "react-native-purchases";
 
@@ -33,6 +34,8 @@ interface PlansCardProps {
  * перенесены без изменений.
  */
 export function PlansCard({ packages, selected, onSelect }: PlansCardProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <View style={styles.plansCard}>
       {packages.map((pkg) => {
@@ -62,7 +65,7 @@ export function PlansCard({ packages, selected, onSelect }: PlansCardProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   plansCard: {
     backgroundColor: colors.surface,
     borderRadius: 16,

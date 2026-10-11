@@ -6,7 +6,8 @@ import {
   EXCHANGE_LABELS,
   needsPassphrase,
 } from "@/shared/types";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
@@ -32,6 +33,8 @@ interface AddConnectionFormProps {
  * submit и стили перенесены без изменений.
  */
 export function AddConnectionForm({ onSaved }: AddConnectionFormProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const router = useRouter();
   const [exchange, setExchange] = useState<ApiExchange>(EXCHANGES[0]);
   const [apiKey, setApiKey] = useState("");
@@ -177,7 +180,7 @@ export function AddConnectionForm({ onSaved }: AddConnectionFormProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   form: { gap: 14 },
   fieldLabel: {
     fontSize: 11,

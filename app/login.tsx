@@ -1,6 +1,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { getAppleAuthentication } from "@/services/auth";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -25,6 +26,8 @@ import {
 const AppleAuth = getAppleAuthentication();
 
 export default function LoginScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const { login, loginApple } = useAuth();
   const [loading, setLoading] = useState(false);
   const [appleAvailable, setAppleAvailable] = useState(false);
@@ -116,7 +119,7 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: "center",

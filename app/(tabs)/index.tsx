@@ -11,7 +11,8 @@ import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { useDashboardSync } from "@/hooks/useDashboardSync";
 import { useSubscription } from "@/hooks/useSubscription";
 import { FREE_TRADE_LIMIT } from "@/shared/config";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
@@ -34,6 +35,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
  * Здесь осталось: ранние состояния, pull-to-refresh и раскладка.
  */
 export default function DashboardScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isPremium, entitlement, loading: subLoading } = useSubscription();
@@ -180,7 +183,7 @@ export default function DashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: 16, paddingBottom: 32, gap: 16 },
   center: {

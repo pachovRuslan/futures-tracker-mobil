@@ -9,7 +9,8 @@ import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/services/auth";
 import { nowUserDateTime } from "@/shared/datetime";
 import type { TradeInsert } from "@/shared/types";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, ScrollView, StyleSheet, View } from "react-native";
@@ -27,6 +28,8 @@ import { Alert, ScrollView, StyleSheet, View } from "react-native";
  * было нельзя.
  */
 export default function NewTradeScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const router = useRouter();
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
@@ -123,7 +126,7 @@ export default function NewTradeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: 16, paddingBottom: 32, gap: 4 },
 });

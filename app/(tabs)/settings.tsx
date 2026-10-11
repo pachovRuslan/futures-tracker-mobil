@@ -7,7 +7,8 @@ import {
   PRIVACY_POLICY_URL,
   TERMS_OF_USE_URL,
 } from "@/shared/config";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme, type ThemeMode } from "@/theme/ThemeContext";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
@@ -20,7 +21,16 @@ import {
   View,
 } from "react-native";
 
+/** Варианты темы оформления (порядок = порядок кнопок в сегменте). */
+const THEME_MODES: Array<{ value: ThemeMode; label: string }> = [
+  { value: "system", label: "Системная" },
+  { value: "light", label: "Светлая" },
+  { value: "dark", label: "Тёмная" },
+];
+
 export default function SettingsScreen() {
+  const { colors, mode: themeMode, setMode: setThemeMode } = useTheme();
+  const styles = createStyles(colors);
   const { user, logout } = useAuth();
   const { isPremium, loading: subLoading, refresh: refreshSubscription } =
     useSubscription();
@@ -168,6 +178,33 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       )}
 
+      {/* Тема оформления: системная / светлая / тёмная. Выбор
+          переживает перезапуск (SecureStore / localStorage). */}
+      <View style={styles.themeCard}>
+        <Text style={styles.themeLabel}>Тема оформления</Text>
+        <View style={styles.themeSegment}>
+          {THEME_MODES.map(({ value, label }) => {
+            const active = themeMode === value;
+            return (
+              <TouchableOpacity
+                key={value}
+                style={[styles.themeOption, active && styles.themeOptionActive]}
+                onPress={() => setThemeMode(value)}
+              >
+                <Text
+                  style={[
+                    styles.themeOptionText,
+                    active && styles.themeOptionTextActive,
+                  ]}
+                >
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
       <TouchableOpacity
         style={styles.menuItem}
         onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
@@ -212,7 +249,7 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg, padding: 16 },
   card: {
     backgroundColor: colors.surface,
@@ -260,6 +297,36 @@ const styles = StyleSheet.create({
   },
   menuText: { fontSize: 14, color: colors.text },
   arrow: { color: colors.textFaint, fontSize: 16 },
+  themeCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 8,
+    gap: 12,
+  },
+  themeLabel: { fontSize: 14, color: colors.text },
+  themeSegment: {
+    flexDirection: "row",
+    backgroundColor: colors.bg,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 3,
+    gap: 3,
+  },
+  themeOption: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  themeOptionActive: { backgroundColor: colors.accent },
+  themeOptionText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.textMuted,
+  },
+  themeOptionTextActive: { color: "#fff" },
   logoutButton: { marginTop: 24, padding: 16, alignItems: "center" },
   logoutText: { color: colors.loss, fontSize: 14 },
   deleteButton: { marginTop: 4, padding: 16, alignItems: "center" },

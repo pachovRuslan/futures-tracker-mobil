@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import {
   ActivityIndicator,
   StyleSheet,
@@ -24,6 +25,8 @@ interface SyncAllBoxProps {
  * и стили перенесены без изменений.
  */
 export function SyncAllBox({ syncing, syncMsg, onSyncAll }: SyncAllBoxProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <View style={styles.syncBox}>
       <TouchableOpacity
@@ -48,7 +51,7 @@ export function SyncAllBox({ syncing, syncMsg, onSyncAll }: SyncAllBoxProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   syncBox: { marginBottom: 12, gap: 8 },
   syncButton: {
     flexDirection: "row",

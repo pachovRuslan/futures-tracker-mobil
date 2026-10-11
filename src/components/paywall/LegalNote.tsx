@@ -1,5 +1,6 @@
 import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from "@/shared/config";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
 /**
@@ -9,6 +10,8 @@ import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
  * перенесены без изменений.
  */
 export function LegalNote() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <>
       <Text style={styles.legalText}>
@@ -29,7 +32,7 @@ export function LegalNote() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   legalText: {
     fontSize: 10,
     color: colors.textFaint,

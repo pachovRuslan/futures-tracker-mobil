@@ -2,7 +2,8 @@ import { LoadingScreen } from "@/components/LoadingScreen";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { isSupabaseConfigured } from "@/shared/config";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { ThemeProvider, useTheme } from "@/theme/ThemeContext";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
 import { SafeAreaView, ScrollView, StyleSheet, Text } from "react-native";
@@ -17,6 +18,8 @@ import { SafeAreaView, ScrollView, StyleSheet, Text } from "react-native";
  * этот экран с инструкцией.
  */
 function ConfigErrorScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <SafeAreaView style={styles.configContainer}>
       <ScrollView contentContainerStyle={styles.configContent}>
@@ -38,6 +41,7 @@ function ConfigErrorScreen() {
 
 function RootNavigator() {
   const { user, loading } = useAuth();
+  const { colors } = useTheme();
   const segments = useSegments();
   const router = useRouter();
 
@@ -62,8 +66,19 @@ function RootNavigator() {
 
   if (loading) return <LoadingScreen />;
 
+  // Нативные хедеры есть только у trade/new и trade/edit (остальные
+  // экраны рисуют свои заголовки). Раньше хедер брался из дефолтной
+  // светлой темы react-navigation — заголовок «Новая сделка» был
+  // чёрным на белом. Теперь фон/цвет хедера — из темы приложения.
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        headerStyle: { backgroundColor: colors.bg },
+        headerTintColor: colors.text,
+        headerShadowVisible: false,
+      }}
+    >
       <Stack.Screen name="login" />
       <Stack.Screen name="auth/callback" />
       <Stack.Screen name="(tabs)" />
@@ -76,48 +91,46 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
-  if (!isSupabaseConfigured) {
-    // Ошибка конфигурации видна без ErrorBoundary — читаемо и в dev, и в prod.
-    return (
-      <ErrorBoundary>
-        <ConfigErrorScreen />
-      </ErrorBoundary>
-    );
-  }
-
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <RootNavigator />
-      </AuthProvider>
+      <ThemeProvider>
+        {isSupabaseConfigured ? (
+          <AuthProvider>
+            <RootNavigator />
+          </AuthProvider>
+        ) : (
+          <ConfigErrorScreen />
+        )}
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }
 
-const styles = StyleSheet.create({
-  configContainer: { flex: 1, backgroundColor: colors.bg },
-  configContent: {
-    padding: 24,
-    gap: 12,
-    justifyContent: "center",
-    flexGrow: 1,
-  },
-  configTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: colors.text,
-    textAlign: "center",
-  },
-  configText: {
-    fontSize: 14,
-    color: colors.textMuted,
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  configCode: {
-    fontSize: 12,
-    color: colors.accent,
-    textAlign: "center",
-    fontFamily: "monospace",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    configContainer: { flex: 1, backgroundColor: colors.bg },
+    configContent: {
+      padding: 24,
+      gap: 12,
+      justifyContent: "center",
+      flexGrow: 1,
+    },
+    configTitle: {
+      fontSize: 20,
+      fontWeight: "700",
+      color: colors.text,
+      textAlign: "center",
+    },
+    configText: {
+      fontSize: 14,
+      color: colors.textMuted,
+      textAlign: "center",
+      lineHeight: 20,
+    },
+    configCode: {
+      fontSize: 12,
+      color: colors.accent,
+      textAlign: "center",
+      fontFamily: "monospace",
+    },
+  });

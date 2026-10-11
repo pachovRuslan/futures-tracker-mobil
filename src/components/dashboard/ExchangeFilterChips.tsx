@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { exchangeLabel } from "@/shared/format";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 interface ExchangeFilterChipsProps {
@@ -22,6 +23,8 @@ export function ExchangeFilterChips({
   exchangeFilter,
   onChange,
 }: ExchangeFilterChipsProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <View style={styles.chipsBlock}>
       <Text style={styles.chipsLabel}>БИРЖИ В PNL</Text>
@@ -76,7 +79,7 @@ export function ExchangeFilterChips({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   chipsBlock: { gap: 8 },
   chipsLabel: {
     fontSize: 10,

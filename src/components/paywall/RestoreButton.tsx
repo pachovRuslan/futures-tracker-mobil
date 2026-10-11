@@ -1,5 +1,6 @@
 import type { PaywallBusy } from "@/hooks/usePaywallActions";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
 
 interface RestoreButtonProps {
@@ -14,6 +15,8 @@ interface RestoreButtonProps {
  * декомпозиции; разметка и стили перенесены без изменений.
  */
 export function RestoreButton({ busy, onRestore }: RestoreButtonProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <Pressable
       style={styles.restoreButton}
@@ -31,7 +34,7 @@ export function RestoreButton({ busy, onRestore }: RestoreButtonProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   restoreButton: {
     paddingVertical: 12,
     alignItems: "center",

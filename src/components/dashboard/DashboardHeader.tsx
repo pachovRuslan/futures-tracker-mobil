@@ -1,5 +1,6 @@
 import type { Entitlement } from "@/shared/types";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -22,6 +23,8 @@ export function DashboardHeader({
   entitlement,
   subLoading,
 }: DashboardHeaderProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   // Бейдж: PREMIUM · GRANT — ручная выдача, PREMIUM — подписка RC.
   // Ветки «allowlist» (PREMIUM · BETA) больше нет: с миграции 13 allowlist
   // премиум не даёт, source у премиума всегда app_store/play_store/manual
@@ -48,7 +51,7 @@ export function DashboardHeader({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",

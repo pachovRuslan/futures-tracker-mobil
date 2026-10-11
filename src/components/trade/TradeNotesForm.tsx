@@ -1,4 +1,5 @@
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import {
   StyleSheet,
   Text,
@@ -29,6 +30,8 @@ export function TradeNotesForm({
   saving,
   onSave,
 }: TradeNotesFormProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <View style={{ gap: 12 }}>
       <Text style={styles.hint}>
@@ -57,7 +60,7 @@ export function TradeNotesForm({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   hint: { fontSize: 12, color: colors.textFaint, lineHeight: 16 },
   field: { gap: 6 },
   label: {

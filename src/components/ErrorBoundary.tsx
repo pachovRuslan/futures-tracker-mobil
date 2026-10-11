@@ -1,4 +1,5 @@
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
@@ -17,6 +18,45 @@ interface State {
  * Expo Router также поддерживает app/_error.tsx, но ErrorBoundary как
  * React-компонент даёт больше контроля над UI.
  */
+
+/**
+ * UI ошибки — отдельная функция-компонент (класс хуков не умеет).
+ * Провайдер темы к этому моменту размонтирован — useTheme
+ * деградирует до системной темы, см. ThemeContext.
+ */
+function ErrorFallback({
+  error,
+  onReset,
+}: {
+  error: Error | null;
+  onReset: () => void;
+}) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  return (
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.emoji}>⚠️</Text>
+        <Text style={styles.title}>Что-то пошло не так</Text>
+        <Text style={styles.subtitle}>
+          Приложение столкнулось с неожиданной ошибкой. Попробуйте снова.
+        </Text>
+        {__DEV__ && error ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{error.message}</Text>
+            {error.stack ? (
+              <Text style={styles.stack}>{error.stack.slice(0, 1000)}</Text>
+            ) : null}
+          </View>
+        ) : null}
+        <Pressable style={styles.button} onPress={onReset}>
+          <Text style={styles.buttonText}>Попробовать снова</Text>
+        </Pressable>
+      </ScrollView>
+    </View>
+  );
+}
+
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { hasError: false, error: null };
 
@@ -38,35 +78,12 @@ export class ErrorBoundary extends Component<Props, State> {
     if (!this.state.hasError) return this.props.children;
 
     return (
-      <View style={styles.container}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.emoji}>⚠️</Text>
-          <Text style={styles.title}>Что-то пошло не так</Text>
-          <Text style={styles.subtitle}>
-            Приложение столкнулось с неожиданной ошибкой. Попробуйте снова.
-          </Text>
-          {__DEV__ && this.state.error ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>
-                {this.state.error.message}
-              </Text>
-              {this.state.error.stack ? (
-                <Text style={styles.stack}>
-                  {this.state.error.stack.slice(0, 1000)}
-                </Text>
-              ) : null}
-            </View>
-          ) : null}
-          <Pressable style={styles.button} onPress={this.handleReset}>
-            <Text style={styles.buttonText}>Попробовать снова</Text>
-          </Pressable>
-        </ScrollView>
-      </View>
+      <ErrorFallback error={this.state.error} onReset={this.handleReset} />
     );
   }
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: {
     flex: 1,

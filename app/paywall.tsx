@@ -10,7 +10,8 @@ import {
   getPremiumPackages,
   isBillingAvailable,
 } from "@/services/purchases";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -25,6 +26,8 @@ import {
 import type { PurchasesPackage } from "react-native-purchases";
 
 export default function PaywallScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const router = useRouter();
   const { user } = useAuth();
   const { isPremium, refresh } = useSubscription();
@@ -167,7 +170,7 @@ export default function PaywallScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: 24, paddingTop: 48, paddingBottom: 48, gap: 24 },
   center: {

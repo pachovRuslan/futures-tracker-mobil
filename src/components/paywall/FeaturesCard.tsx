@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { StyleSheet, Text, View } from "react-native";
 
 /** Только реально существующие возможности Premium (см. REFACTORING.md). */
@@ -26,6 +27,8 @@ const FEATURES: Array<{
  * без изменений.
  */
 export function FeaturesCard() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <View style={styles.featuresCard}>
       {FEATURES.map((f) => (
@@ -43,7 +46,7 @@ export function FeaturesCard() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   featuresCard: {
     backgroundColor: colors.surface,
     borderRadius: 16,

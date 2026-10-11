@@ -1,8 +1,11 @@
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { Link, Stack } from "expo-router";
 import { SafeAreaView, StyleSheet, Text } from "react-native";
 
 export default function NotFoundScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <SafeAreaView style={styles.container}>
       <Stack.Screen options={{ title: "Не найдено" }} />
@@ -14,7 +17,7 @@ export default function NotFoundScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: "center",

@@ -1,7 +1,8 @@
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/services/auth";
 import type { BalanceType } from "@/shared/types";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -37,6 +38,8 @@ interface BalanceFormProps {
  * и стили перенесены без изменений.
  */
 export function BalanceForm({ onSaved }: BalanceFormProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const { user } = useAuth();
   const [formOpen, setFormOpen] = useState(false);
   const [type, setType] = useState<BalanceType>("spot");
@@ -171,7 +174,7 @@ export function BalanceForm({ onSaved }: BalanceFormProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   addButton: {
     backgroundColor: colors.accent,
     borderRadius: 8,

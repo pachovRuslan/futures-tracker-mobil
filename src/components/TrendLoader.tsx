@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Animated, Easing, View } from "react-native";
 
-import { colors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 
 /**
  * Анимация загрузки «трендовая линия»: зелёная кривая доходности
@@ -95,6 +95,7 @@ const GRID = [22, 44];
  *              scale={0.6} — размер контейнера пропорционально меньше.
  */
 export function TrendLoader({ scale = 1 }: { scale?: number }) {
+  const { colors } = useTheme();
   const progress = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(1)).current;
   const ringScale = useRef(new Animated.Value(1)).current;

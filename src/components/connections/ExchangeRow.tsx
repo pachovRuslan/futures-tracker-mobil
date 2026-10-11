@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { ApiExchange, Connection } from "@/shared/types";
 import { EXCHANGE_LABELS } from "@/shared/types";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import {
   ActivityIndicator,
   StyleSheet,
@@ -36,6 +37,8 @@ export function ExchangeRow({
   onSync,
   onDisconnect,
 }: ExchangeRowProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <View style={styles.row}>
       <View>
@@ -76,7 +79,7 @@ export function ExchangeRow({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   row: {
     flexDirection: "row",
     justifyContent: "space-between",

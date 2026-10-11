@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { EXCHANGE_CONNECTIONS_ENABLED } from "@/shared/config";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 interface ActionButtonsProps {
@@ -25,6 +26,8 @@ export function ActionButtons({
   onAddExchange,
   isPremium,
 }: ActionButtonsProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <View style={styles.actionsRow}>
       <Pressable
@@ -51,7 +54,7 @@ export function ActionButtons({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   actionsRow: { flexDirection: "row", gap: 8 },
   actionButton: {
     flex: 1,

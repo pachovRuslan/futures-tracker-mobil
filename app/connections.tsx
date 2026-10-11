@@ -8,7 +8,8 @@ import { api, isPremiumRequired } from "@/services/api";
 import { EXCHANGE_CONNECTIONS_ENABLED } from "@/shared/config";
 import type { ApiExchange, Connection } from "@/shared/types";
 import { EXCHANGES, EXCHANGE_LABELS } from "@/shared/types";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -22,6 +23,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function ConnectionsScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isPremium, loading: entitlementLoading } = useSubscription();
@@ -162,7 +165,7 @@ export default function ConnectionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: 16, paddingBottom: 32 },
   center: {

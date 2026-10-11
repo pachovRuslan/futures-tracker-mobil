@@ -1,5 +1,6 @@
 import { fmt, fmtPnl } from "@/shared/trade-model";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { AllTimeAggregate, MonthAggregate } from "@/hooks/useDashboardStats";
 
@@ -28,6 +29,8 @@ export function StatsGrid({
   selectedMonth,
   onResetMonth,
 }: StatsGridProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <View style={styles.gridSection}>
       <View style={styles.gridHeaderRow}>
@@ -127,7 +130,7 @@ export function StatsGrid({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   gridSection: { gap: 8 },
   gridHeaderRow: {
     flexDirection: "row",

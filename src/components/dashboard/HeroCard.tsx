@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { exchangeLabel, plural } from "@/shared/format";
 import { fmtPnl } from "@/shared/trade-model";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { useMemo } from "react";
 import {
   ActivityIndicator,
@@ -46,11 +47,14 @@ export function HeroCard({
   syncMsg,
   onSync,
 }: HeroCardProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const pnlColor = useMemo(() => {
     if (net > 0) return colors.profit;
     if (net < 0) return colors.loss;
     return colors.textMuted;
-  }, [net]);
+    // colors в зависимостях: при смене темы пересчитать цвет итога.
+  }, [net, colors]);
 
   return (
     <View style={styles.heroCard}>
@@ -90,7 +94,7 @@ export function HeroCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   heroCard: {
     backgroundColor: colors.surface,
     borderRadius: 8,

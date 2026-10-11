@@ -3,7 +3,8 @@ import { useTrades } from "@/hooks/useTrades";
 import { getSupabase } from "@/services/auth";
 import { fmtDate, fmtPnl, tradeNetPnl } from "@/shared/trade-model";
 import { EXCHANGE_LABELS, type TradeRow } from "@/shared/types";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo } from "react";
 import {
@@ -16,6 +17,8 @@ import {
 } from "react-native";
 
 export default function TradesScreen() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const { trades, loading, error, reload } = useTrades();
   const router = useRouter();
 
@@ -126,13 +129,15 @@ export default function TradesScreen() {
         </TouchableOpacity>
       );
     },
-    [openActions],
+    // styles в зависимостях: при смене темы фабрика даёт новый объект —
+    // без этого список держал бы цвета прошлой темы.
+    [openActions, styles, colors],
   );
 
   const keyExtractor = useCallback((item: TradeRow) => item.id, []);
   const ListEmptyComponent = useMemo(
     () => <Text style={styles.empty}>Сделок пока нет</Text>,
-    [],
+    [styles],
   );
 
   if (loading && trades.length === 0) {
@@ -171,7 +176,7 @@ export default function TradesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   center: {
     flex: 1,

@@ -1,5 +1,6 @@
 import type { PaywallBusy } from "@/hooks/usePaywallActions";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
 import type { PurchasesPackage } from "react-native-purchases";
 
@@ -17,6 +18,8 @@ interface BuyButtonProps {
  * декомпозиции; разметка и стили перенесены без изменений.
  */
 export function BuyButton({ busy, selected, onBuy }: BuyButtonProps) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <Pressable
       style={[styles.buyButton, busy === "buy" && styles.buttonDisabled]}
@@ -34,7 +37,7 @@ export function BuyButton({ busy, selected, onBuy }: BuyButtonProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   buyButton: {
     backgroundColor: colors.accent,
     paddingVertical: 16,

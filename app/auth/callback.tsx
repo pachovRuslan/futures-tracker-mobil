@@ -6,7 +6,8 @@ import {
   getSupabase,
   parseOAuthParams,
 } from "@/services/auth";
-import { colors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -33,6 +34,8 @@ import {
  * второй обмен падает с 400 и ломает вход (см. REFACTORING.md, баг №3).
  */
 export default function AuthCallback() {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const router = useRouter();
   const isHandled = useRef(false);
   // Обмен кода начат — таймауту запрещено выкидывать на /login (см. ниже).
@@ -186,7 +189,7 @@ export default function AuthCallback() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: "center",
