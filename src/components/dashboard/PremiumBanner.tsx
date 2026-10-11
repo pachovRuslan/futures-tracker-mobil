@@ -1,3 +1,4 @@
+import { useI18n } from "@/i18n/I18nContext";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -17,6 +18,7 @@ interface PremiumBannerProps {
 export function PremiumBanner({ onPress }: PremiumBannerProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   return (
     <Pressable
       style={styles.premiumCard}
@@ -24,9 +26,11 @@ export function PremiumBanner({ onPress }: PremiumBannerProps) {
       accessibilityRole="button"
     >
       <View style={styles.premiumCardContent}>
-        <Text style={styles.premiumCardTitle}>Upgrade to Premium</Text>
+        <Text style={styles.premiumCardTitle}>
+          {t("premium.bannerTitle")}
+        </Text>
         <Text style={styles.premiumCardDesc}>
-          Авто-синк сделок с бирж · Безлимит ручных сделок
+          {t("premium.bannerDesc")}
         </Text>
       </View>
       <Text style={styles.premiumCardArrow}>→</Text>

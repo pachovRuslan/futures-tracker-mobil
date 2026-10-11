@@ -1,6 +1,7 @@
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { I18nProvider, useI18n } from "@/i18n/I18nContext";
 import { isSupabaseConfigured } from "@/shared/config";
 import type { ThemeColors } from "@/theme/colors";
 import { ThemeProvider, useTheme } from "@/theme/ThemeContext";
@@ -20,18 +21,17 @@ import { SafeAreaView, ScrollView, StyleSheet, Text } from "react-native";
 function ConfigErrorScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   return (
     <SafeAreaView style={styles.configContainer}>
       <ScrollView contentContainerStyle={styles.configContent}>
-        <Text style={styles.configTitle}>Требуется настройка</Text>
-        <Text style={styles.configText}>
-          Не заданы переменные окружения Supabase:
-        </Text>
+        <Text style={styles.configTitle}>{t("config.title")}</Text>
+        <Text style={styles.configText}>{t("config.varsIntro")}</Text>
         <Text style={styles.configCode}>EXPO_PUBLIC_SUPABASE_URL</Text>
         <Text style={styles.configCode}>EXPO_PUBLIC_SUPABASE_ANON_KEY</Text>
         <Text style={styles.configText}>
-          Создайте файл .env в корне проекта (см. README.md), затем
-          перезапустите dev-сервер:{"\n"}
+          {t("config.text")}
+          {"\n"}
           <Text style={styles.configCode}>npx expo start --clear</Text>
         </Text>
       </ScrollView>
@@ -91,17 +91,23 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  // I18nProvider поверх ThemeProvider: язык нужен и экрану ошибки
+  // конфигурации (он рисуется вместо AuthProvider), и краш-экрану
+  // ErrorBoundary (его фолбэк живёт уже без провайдеров — см.
+  // useI18n с деградацией на модульное состояние).
   return (
     <ErrorBoundary>
-      <ThemeProvider>
-        {isSupabaseConfigured ? (
-          <AuthProvider>
-            <RootNavigator />
-          </AuthProvider>
-        ) : (
-          <ConfigErrorScreen />
-        )}
-      </ThemeProvider>
+      <I18nProvider>
+        <ThemeProvider>
+          {isSupabaseConfigured ? (
+            <AuthProvider>
+              <RootNavigator />
+            </AuthProvider>
+          ) : (
+            <ConfigErrorScreen />
+          )}
+        </ThemeProvider>
+      </I18nProvider>
     </ErrorBoundary>
   );
 }

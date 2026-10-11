@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useI18n } from "@/i18n/I18nContext";
 import type { ApiExchange, Connection } from "@/shared/types";
 import { EXCHANGE_LABELS } from "@/shared/types";
 import type { ThemeColors } from "@/theme/colors";
@@ -39,6 +40,7 @@ export function ExchangeRow({
 }: ExchangeRowProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   return (
     <View style={styles.row}>
       <View>
@@ -49,7 +51,7 @@ export function ExchangeRow({
             <Text style={styles.connected}>{conn.key_preview}</Text>
           </View>
         ) : (
-          <Text style={styles.notConnected}>не подключено</Text>
+          <Text style={styles.notConnected}>{t("conn.notConnected")}</Text>
         )}
       </View>
       {conn && (
@@ -71,7 +73,7 @@ export function ExchangeRow({
             )}
           </TouchableOpacity>
           <TouchableOpacity onPress={() => onDisconnect(ex)}>
-            <Text style={styles.disconnect}>Отключить</Text>
+            <Text style={styles.disconnect}>{t("conn.disconnect")}</Text>
           </TouchableOpacity>
         </View>
       )}

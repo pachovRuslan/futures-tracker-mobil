@@ -1,4 +1,5 @@
 import type { PaywallBusy } from "@/hooks/usePaywallActions";
+import { useI18n } from "@/i18n/I18nContext";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
 import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
@@ -17,6 +18,7 @@ interface RestoreButtonProps {
 export function RestoreButton({ busy, onRestore }: RestoreButtonProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   return (
     <Pressable
       style={styles.restoreButton}
@@ -27,7 +29,7 @@ export function RestoreButton({ busy, onRestore }: RestoreButtonProps) {
         <ActivityIndicator size="small" color={colors.accent} />
       ) : (
         <Text style={styles.restoreButtonText}>
-          Восстановить покупки
+          {t("paywall.restore")}
         </Text>
       )}
     </Pressable>

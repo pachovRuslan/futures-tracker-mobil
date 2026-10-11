@@ -1,3 +1,4 @@
+import { useI18n } from "@/i18n/I18nContext";
 import { getSupabase } from "@/services/auth";
 import type { BalanceSnapshot } from "@/shared/types";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -13,6 +14,7 @@ const BALANCE_SELECT = "id,type,value_usd,snapshot_date,note,created_at";
  * mountedRef и confirmDelete перенесены без изменений.
  */
 export function useBalanceSnapshots() {
+  const { t } = useI18n();
   const [snapshots, setSnapshots] = useState<BalanceSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,30 +50,37 @@ export function useBalanceSnapshots() {
 
   const confirmDelete = useCallback(
     (s: BalanceSnapshot) => {
-      Alert.alert("Удалить запись", `$${s.value_usd} от ${s.snapshot_date}?`, [
-        { text: "Отмена" },
-        {
-          text: "Удалить",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const { error: delError } = await getSupabase()
-                .from("balance_snapshots")
-                .delete()
-                .eq("id", s.id);
-              if (delError) throw delError;
-              await load();
-            } catch (e) {
-              Alert.alert(
-                "Ошибка",
-                e instanceof Error ? e.message : String(e),
-              );
-            }
+      Alert.alert(
+        t("balance.deleteTitle"),
+        t("balance.deleteMsg", {
+          value: `$${s.value_usd}`,
+          date: s.snapshot_date,
+        }),
+        [
+          { text: t("common.cancel") },
+          {
+            text: t("common.delete"),
+            style: "destructive",
+            onPress: async () => {
+              try {
+                const { error: delError } = await getSupabase()
+                  .from("balance_snapshots")
+                  .delete()
+                  .eq("id", s.id);
+                if (delError) throw delError;
+                await load();
+              } catch (e) {
+                Alert.alert(
+                  t("common.error"),
+                  e instanceof Error ? e.message : String(e),
+                );
+              }
+            },
           },
-        },
-      ]);
+        ],
+      );
     },
-    [load],
+    [load, t],
   );
 
   return { snapshots, loading, error, load, confirmDelete };

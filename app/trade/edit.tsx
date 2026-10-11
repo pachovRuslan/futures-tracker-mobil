@@ -2,6 +2,7 @@ import { TradeNotesForm } from "@/components/trade/TradeNotesForm";
 import { TradeSummaryCard } from "@/components/trade/TradeSummaryCard";
 import { TradeForm } from "@/components/TradeForm";
 import { TrendLoader } from "@/components/TrendLoader";
+import { useI18n } from "@/i18n/I18nContext";
 import { useEditableTrade } from "@/hooks/useEditableTrade";
 import { useTradeMutations } from "@/hooks/useTradeMutations";
 import { formatUserDateTime } from "@/shared/datetime";
@@ -35,6 +36,7 @@ import {
 export default function EditTradeScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
 
@@ -49,7 +51,7 @@ export default function EditTradeScreen() {
     return (
       <View style={styles.center}>
         <TrendLoader />
-        <Text style={styles.muted}>Загрузка сделки…</Text>
+        <Text style={styles.muted}>{t("trade.loading")}</Text>
       </View>
     );
   }
@@ -57,10 +59,12 @@ export default function EditTradeScreen() {
   if (loadError || !trade) {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorTitle}>Не удалось загрузить</Text>
-        <Text style={styles.muted}>{loadError ?? "Сделка не найдена"}</Text>
+        <Text style={styles.errorTitle}>{t("common.loadFailed")}</Text>
+        <Text style={styles.muted}>
+          {loadError ?? t("trade.notFound")}
+        </Text>
         <TouchableOpacity style={styles.retryButton} onPress={() => router.back()}>
-          <Text style={styles.retryButtonText}>Назад</Text>
+          <Text style={styles.retryButtonText}>{t("common.back")}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -73,7 +77,7 @@ export default function EditTradeScreen() {
       keyboardShouldPersistTaps="handled"
     >
       <Stack.Screen
-        options={{ title: "Редактирование сделки", headerShown: true }}
+        options={{ title: t("trade.editTitle"), headerShown: true }}
       />
 
       {/* Сводка по сделке (для не-manual — единственный контекст). */}
@@ -94,7 +98,7 @@ export default function EditTradeScreen() {
             closedAt: formatUserDateTime(trade.closed_at),
             notes: trade.notes ?? "",
           }}
-          submitLabel="Сохранить изменения"
+          submitLabel={t("trade.saveChanges")}
           submitting={saving}
           onSubmit={handleUpdate}
         />
@@ -109,7 +113,7 @@ export default function EditTradeScreen() {
 
       {isManual && (
         <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-          <Text style={styles.deleteButtonText}>Удалить сделку</Text>
+          <Text style={styles.deleteButtonText}>{t("trade.deleteButton")}</Text>
         </TouchableOpacity>
       )}
     </ScrollView>

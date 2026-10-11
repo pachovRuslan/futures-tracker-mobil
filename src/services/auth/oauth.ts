@@ -1,5 +1,6 @@
 import { getSupabase } from "./client";
 import type { Session, User } from "@supabase/supabase-js";
+import { t } from "@/i18n";
 import { isRunningInExpoGo } from "expo";
 import { makeRedirectUri } from "expo-auth-session";
 import Constants from "expo-constants";
@@ -81,13 +82,12 @@ export function describeOAuthError(params: Record<string, string>): string {
   const code = params.error_code ?? params.error;
   const desc = params.error_description ?? params.error;
   if (code === "403" || /not allowed|callback/i.test(desc ?? "")) {
-    return (
-      "Supabase отклонил redirect (403 / Callback URL not allowed). " +
-      "Добавьте текущий redirect URI в Supabase Dashboard → Authentication → " +
-      "URL Configuration → Redirect URLs (URI см. в консоли выше)."
-    );
+    return t("auth.supabaseRedirect");
   }
-  return `Вход не выполнен: ${code ?? "unknown"} — ${desc ?? "нет описания"}`;
+  return t("auth.loginFailed", {
+    code: code ?? "unknown",
+    desc: desc ?? t("auth.noDesc"),
+  });
 }
 
 export async function signInWithGoogle(): Promise<void> {
@@ -129,11 +129,11 @@ export async function signInWithGoogle(): Promise<void> {
     },
   });
   if (error) throw error;
-  if (!data.url) throw new Error("Supabase не вернул OAuth URL");
+  if (!data.url) throw new Error(t("auth.errNoOAuthUrl"));
 
   if (!isRunningInExpoGo()) {
     const canOpen = await Linking.canOpenURL(data.url);
-    if (!canOpen) throw new Error("Не удаётся открыть браузер для авторизации");
+    if (!canOpen) throw new Error(t("auth.errCantOpenBrowser"));
     await Linking.openURL(data.url);
     return;
   }
@@ -157,10 +157,7 @@ export async function signInWithGoogle(): Promise<void> {
   }
 
   if (!params.code) {
-    throw new Error(
-      "Supabase вернул redirect без кода авторизации. Проверьте, что redirect " +
-        `URI "${redirectUrl}" добавлен в Supabase → Auth → Redirect URLs.`,
-    );
+    throw new Error(t("auth.errRedirectNoCode", { url: redirectUrl }));
   }
 
   await exchangeCodeOnce(params.code);
@@ -187,7 +184,7 @@ export async function exchangeCodeOnce(code: string): Promise<User | null> {
   if (exchangedCodes.has(code)) {
     const session = await waitForSession(6000);
     if (session?.user) return session.user;
-    throw new Error("Таймаут ожидания сессии после обмена кода");
+    throw new Error(t("auth.errSessionTimeout"));
   }
 
   exchangedCodes.add(code);

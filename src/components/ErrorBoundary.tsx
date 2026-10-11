@@ -1,3 +1,4 @@
+import { useI18n } from "@/i18n/I18nContext";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
 import { Component, type ErrorInfo, type ReactNode } from "react";
@@ -21,8 +22,9 @@ interface State {
 
 /**
  * UI ошибки — отдельная функция-компонент (класс хуков не умеет).
- * Провайдер темы к этому моменту размонтирован — useTheme
- * деградирует до системной темы, см. ThemeContext.
+ * Провайдеры темы и языка к этому моменту размонтированы — useTheme
+ * деградирует до системной темы, useI18n — к последнему языку
+ * (см. ThemeContext и I18nContext).
  */
 function ErrorFallback({
   error,
@@ -33,14 +35,15 @@ function ErrorFallback({
 }) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  // Провайдер языка к этому моменту размонтирован — useI18n
+  // деградирует к последнему выбранному языку (модульное состояние).
+  const { t } = useI18n();
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.emoji}>⚠️</Text>
-        <Text style={styles.title}>Что-то пошло не так</Text>
-        <Text style={styles.subtitle}>
-          Приложение столкнулось с неожиданной ошибкой. Попробуйте снова.
-        </Text>
+        <Text style={styles.title}>{t("errorScreen.title")}</Text>
+        <Text style={styles.subtitle}>{t("errorScreen.subtitle")}</Text>
         {__DEV__ && error ? (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>{error.message}</Text>
@@ -50,7 +53,7 @@ function ErrorFallback({
           </View>
         ) : null}
         <Pressable style={styles.button} onPress={onReset}>
-          <Text style={styles.buttonText}>Попробовать снова</Text>
+          <Text style={styles.buttonText}>{t("errorScreen.retry")}</Text>
         </Pressable>
       </ScrollView>
     </View>

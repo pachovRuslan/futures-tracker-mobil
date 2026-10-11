@@ -1,4 +1,5 @@
 import { TrendLoader } from "@/components/TrendLoader";
+import { useI18n } from "@/i18n/I18nContext";
 import {
   consumePendingCallbackUrl,
   describeOAuthError,
@@ -36,6 +37,7 @@ import {
 export default function AuthCallback() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   const router = useRouter();
   const isHandled = useRef(false);
   // Обмен кода начат — таймауту запрещено выкидывать на /login (см. ниже).
@@ -64,7 +66,7 @@ export default function AuthCallback() {
         // пользователь бесконечно возвращался на экран входа без объяснений.
         const msg = e instanceof Error ? e.message : String(e);
         console.error("[Callback] exchangeCode error:", msg);
-        Alert.alert("Не удалось завершить вход", msg);
+        Alert.alert(t("auth.exchangeFailed"), msg);
         redirect("/login");
       }
     };
@@ -85,7 +87,7 @@ export default function AuthCallback() {
           params.error,
           params.error_description,
         );
-        Alert.alert("Ошибка авторизации", describeOAuthError(params));
+        Alert.alert(t("auth.oauthError"), describeOAuthError(params));
         redirect("/login");
         return true;
       }
@@ -162,8 +164,8 @@ export default function AuthCallback() {
       } = await getSupabase().auth.getSession();
       if (!session) {
         Alert.alert(
-          "Вход не завершён",
-          "Обмен ключами затянулся более чем на минуту. Попробуйте войти ещё раз.",
+          t("auth.timeoutTitle"),
+          t("auth.timeoutBody"),
         );
       }
       redirect(session ? "/" : "/login");
@@ -175,15 +177,13 @@ export default function AuthCallback() {
       unsub?.unsubscribe();
       linkingSub?.remove();
     };
-  }, [router]);
+  }, [router, t]);
 
   return (
     <View style={styles.container}>
       <TrendLoader />
       <Text style={styles.text}>
-        {slow
-          ? "Завершаем вход — на медленной сети это может занять до минуты…"
-          : "Вход в систему..."}
+        {slow ? t("auth.slow") : t("auth.progress")}
       </Text>
     </View>
   );

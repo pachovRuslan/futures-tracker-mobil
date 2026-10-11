@@ -1,5 +1,5 @@
 import { CHART_MIN_MONTHS } from "@/hooks/useDashboardStats";
-import { plural } from "@/shared/format";
+import { useI18n } from "@/i18n/I18nContext";
 import { fmtPnl } from "@/shared/trade-model";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
@@ -44,6 +44,7 @@ export function PnlChart({
 }: PnlChartProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t, plural } = useI18n();
   /** >6 месяцев — включаем горизонтальный скролл (график «расширяется»). */
   const isWideChart = monthly.length > CHART_MIN_MONTHS;
   const chartScrollRef = useRef<ScrollView>(null);
@@ -60,7 +61,12 @@ export function PnlChart({
 
   const chartSubtitle = selectedBar
     ? `${selectedBar.label}: ${fmtPnl(selectedBar.value)}`
-    : `${tradesCount} ${plural(tradesCount, "сделка", "сделки", "сделок")} · ${monthly.filter((m) => m.value !== 0).length || 1} мес.`;
+    : `${tradesCount} ${plural(tradesCount, {
+        ru: ["сделка", "сделки", "сделок"],
+        en: ["trade", "trades"],
+      })} · ${
+        monthly.filter((m) => m.value !== 0).length || 1
+      } ${t("chart.monthsShort")}`;
 
   /**
    * Отрисовка одного бара месячного графика (общая для обоих режимов).
@@ -124,7 +130,7 @@ export function PnlChart({
   return (
     <View style={styles.chartCard}>
       <View style={styles.chartHeader}>
-        <Text style={styles.chartTitle}>PNL ПО МЕСЯЦАМ</Text>
+        <Text style={styles.chartTitle}>{t("chart.title")}</Text>
         <Text style={styles.chartSubtitle} numberOfLines={1}>
           {chartSubtitle}
         </Text>

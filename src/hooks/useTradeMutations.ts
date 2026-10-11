@@ -4,6 +4,7 @@ import {
   validateTradeFormValues,
   type TradeFormValues,
 } from "@/components/TradeForm";
+import { useI18n } from "@/i18n/I18nContext";
 import { getSupabase } from "@/services/auth";
 import type { TradeRow } from "@/shared/types";
 import { useRouter } from "expo-router";
@@ -28,6 +29,7 @@ interface UseTradeMutationsArgs {
  */
 export function useTradeMutations({ trade, notes }: UseTradeMutationsArgs) {
   const router = useRouter();
+  const { t } = useI18n();
   /** Идёт сохранение/удаление (блокирует повторные сабмиты и кнопки). */
   const [saving, setSaving] = useState(false);
 
@@ -35,9 +37,9 @@ export function useTradeMutations({ trade, notes }: UseTradeMutationsArgs) {
     async (values: TradeFormValues) => {
       if (!trade || saving) return;
 
-      const validationError = validateTradeFormValues(values);
+      const validationError = validateTradeFormValues(values, t);
       if (validationError) {
-        Alert.alert("Проверьте поля", validationError);
+        Alert.alert(t("trade.checkFields"), validationError);
         return;
       }
 
@@ -63,7 +65,7 @@ export function useTradeMutations({ trade, notes }: UseTradeMutationsArgs) {
           .update(update)
           .eq("id", trade.id);
         if (error) {
-          Alert.alert("Ошибка", error.message);
+          Alert.alert(t("common.error"), error.message);
           return;
         }
         router.back();
@@ -71,7 +73,7 @@ export function useTradeMutations({ trade, notes }: UseTradeMutationsArgs) {
         setSaving(false);
       }
     },
-    [trade, saving, router],
+    [trade, saving, router, t],
   );
 
   const handleSaveNotes = useCallback(async () => {
@@ -83,24 +85,24 @@ export function useTradeMutations({ trade, notes }: UseTradeMutationsArgs) {
         .update({ notes: notes.trim() || null })
         .eq("id", trade.id);
       if (error) {
-        Alert.alert("Ошибка", error.message);
+        Alert.alert(t("common.error"), error.message);
         return;
       }
       router.back();
     } finally {
       setSaving(false);
     }
-  }, [trade, saving, notes, router]);
+  }, [trade, saving, notes, router, t]);
 
   const handleDelete = useCallback(() => {
     if (!trade) return;
     Alert.alert(
-      "Удалить сделку?",
-      `${trade.symbol} — действие необратимо.`,
+      t("trades.deleteTitle"),
+      t("trades.deleteMsg", { symbol: trade.symbol }),
       [
-        { text: "Отмена", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Удалить",
+          text: t("common.delete"),
           style: "destructive",
           onPress: async () => {
             const { error } = await getSupabase()
@@ -108,7 +110,7 @@ export function useTradeMutations({ trade, notes }: UseTradeMutationsArgs) {
               .delete()
               .eq("id", trade.id);
             if (error) {
-              Alert.alert("Ошибка", error.message);
+              Alert.alert(t("common.error"), error.message);
               return;
             }
             router.back();
@@ -116,7 +118,7 @@ export function useTradeMutations({ trade, notes }: UseTradeMutationsArgs) {
         },
       ],
     );
-  }, [trade, router]);
+  }, [trade, router, t]);
 
   return { saving, handleUpdate, handleSaveNotes, handleDelete };
 }

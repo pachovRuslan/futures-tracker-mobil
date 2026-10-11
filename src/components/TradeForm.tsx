@@ -1,3 +1,5 @@
+import { useI18n } from "@/i18n/I18nContext";
+import type { TFunction } from "@/i18n";
 import { nowUserDateTime, parseUserDateTime } from "@/shared/datetime";
 import type { TradeSide } from "@/shared/types";
 import type { ThemeColors } from "@/theme/colors";
@@ -48,35 +50,40 @@ export function parseNum(raw: string): number | null {
  * Валидация формы. Возвращает текст ошибки или null, если всё ок.
  * Проверяет тикер, все числовые поля (раньше молча терялся qty с
  * опечаткой) и обе даты, включая логику «закрытие раньше открытия».
+ * Перевод передаёт вызывающий код (t из useI18n) — сама функция вне
+ * React и о языке не знает.
  */
-export function validateTradeFormValues(v: TradeFormValues): string | null {
-  if (!v.symbol.trim()) return "Укажите тикер (например, BTCUSDT).";
+export function validateTradeFormValues(
+  v: TradeFormValues,
+  t: TFunction,
+): string | null {
+  if (!v.symbol.trim()) return t("form.vSymbol");
 
   const numericFields: Array<[keyof TradeFormValues, string]> = [
-    ["realizedPnl", "P&L"],
-    ["qty", "Количество"],
-    ["entryPrice", "Entry"],
-    ["closePrice", "Close"],
-    ["fee", "Комиссия"],
-    ["funding", "Funding"],
+    ["realizedPnl", t("form.fieldPnl")],
+    ["qty", t("form.fieldQty")],
+    ["entryPrice", t("form.entry")],
+    ["closePrice", t("form.close")],
+    ["fee", t("form.fieldFee")],
+    ["funding", t("form.funding")],
   ];
   for (const [field, label] of numericFields) {
     const raw = v[field] as string;
     if (raw.trim() && parseNum(raw) == null) {
-      return `${label} должен быть числом.`;
+      return t("form.vNumeric", { field: label });
     }
   }
 
   const openedIso = v.openedAt.trim() ? parseUserDateTime(v.openedAt) : null;
   if (v.openedAt.trim() && !openedIso) {
-    return "Дата открытия: формат ГГГГ-ММ-ДД ЧЧ:ММ (например, 2026-10-05 14:30).";
+    return t("form.vOpenedFormat");
   }
   const closedIso = v.closedAt.trim() ? parseUserDateTime(v.closedAt) : null;
   if (v.closedAt.trim() && !closedIso) {
-    return "Дата закрытия: формат ГГГГ-ММ-ДД ЧЧ:ММ (например, 2026-10-05 14:30).";
+    return t("form.vClosedFormat");
   }
   if (openedIso && closedIso && new Date(closedIso) < new Date(openedIso)) {
-    return "Дата закрытия раньше даты открытия.";
+    return t("form.vClosedBeforeOpened");
   }
 
   return null;
@@ -123,6 +130,7 @@ function DateTimeField({
 }) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
@@ -141,7 +149,7 @@ function DateTimeField({
           onPress={() => onChange(nowUserDateTime())}
           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
         >
-          <Text style={styles.nowButtonText}>сейчас</Text>
+          <Text style={styles.nowButtonText}>{t("form.now")}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -157,6 +165,7 @@ export function TradeForm({
 }: TradeFormProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   const [symbol, setSymbol] = useState(initial?.symbol ?? "");
   const [side, setSide] = useState<TradeSide>(initial?.side ?? "long");
   const [qty, setQty] = useState(initial?.qty ?? "");
@@ -190,7 +199,7 @@ export function TradeForm({
   return (
     <>
       <View style={styles.field}>
-        <Text style={styles.label}>Тикер *</Text>
+        <Text style={styles.label}>{t("form.symbol")}</Text>
         <TextInput
           style={styles.input}
           placeholder="BTCUSDT"
@@ -203,7 +212,7 @@ export function TradeForm({
       </View>
 
       <View style={styles.field}>
-        <Text style={styles.label}>Направление</Text>
+        <Text style={styles.label}>{t("form.direction")}</Text>
         <View style={styles.sideRow}>
           {(["long", "short"] as const).map((s) => (
             <TouchableOpacity
@@ -226,7 +235,7 @@ export function TradeForm({
 
       <View style={styles.fieldRow}>
         <View style={[styles.field, { flex: 1 }]}>
-          <Text style={styles.label}>Кол-во</Text>
+          <Text style={styles.label}>{t("form.qty")}</Text>
           <TextInput
             style={styles.input}
             placeholder="0.01"
@@ -237,7 +246,7 @@ export function TradeForm({
           />
         </View>
         <View style={[styles.field, { flex: 1 }]}>
-          <Text style={styles.label}>P&L, USDT *</Text>
+          <Text style={styles.label}>{t("form.pnl")}</Text>
           <TextInput
             style={styles.input}
             placeholder="-12.5"
@@ -251,7 +260,7 @@ export function TradeForm({
 
       <View style={styles.fieldRow}>
         <View style={[styles.field, { flex: 1 }]}>
-          <Text style={styles.label}>Entry</Text>
+          <Text style={styles.label}>{t("form.entry")}</Text>
           <TextInput
             style={styles.input}
             placeholder="42000"
@@ -262,10 +271,10 @@ export function TradeForm({
           />
         </View>
         <View style={[styles.field, { flex: 1 }]}>
-          <Text style={styles.label}>Close</Text>
+          <Text style={styles.label}>{t("form.close")}</Text>
           <TextInput
             style={styles.input}
-            placeholder="пусто = открыта"
+            placeholder={t("form.closePlaceholder")}
             placeholderTextColor={colors.textFaint}
             value={closePrice}
             onChangeText={setClosePrice}
@@ -276,7 +285,7 @@ export function TradeForm({
 
       <View style={styles.fieldRow}>
         <View style={[styles.field, { flex: 1 }]}>
-          <Text style={styles.label}>Комиссия</Text>
+          <Text style={styles.label}>{t("form.fee")}</Text>
           <TextInput
             style={styles.input}
             placeholder="0"
@@ -287,7 +296,7 @@ export function TradeForm({
           />
         </View>
         <View style={[styles.field, { flex: 1 }]}>
-          <Text style={styles.label}>Funding</Text>
+          <Text style={styles.label}>{t("form.funding")}</Text>
           <TextInput
             style={styles.input}
             placeholder="0"
@@ -302,23 +311,23 @@ export function TradeForm({
       {/* Даты (волна 2): раньше всегда писалось «сейчас» — задним
           числом сделку завести было нельзя. */}
       <DateTimeField
-        label="Открыта"
+        label={t("form.opened")}
         value={openedAt}
         onChange={setOpenedAt}
-        placeholder="ГГГГ-ММ-ДД ЧЧ:ММ"
+        placeholder={t("form.dtPlaceholder")}
       />
       <DateTimeField
-        label="Закрыта"
+        label={t("form.closed")}
         value={closedAt}
         onChange={setClosedAt}
-        placeholder="пусто = как открыта/сейчас"
+        placeholder={t("form.closedPlaceholder")}
       />
 
       <View style={styles.field}>
-        <Text style={styles.label}>Заметки</Text>
+        <Text style={styles.label}>{t("form.notes")}</Text>
         <TextInput
           style={[styles.input, styles.notesInput]}
-          placeholder="Опционально"
+          placeholder={t("form.notesPlaceholder")}
           placeholderTextColor={colors.textFaint}
           value={notes}
           onChangeText={setNotes}

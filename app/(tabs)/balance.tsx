@@ -2,6 +2,7 @@ import { BalanceForm } from "@/components/balance/BalanceForm";
 import { BalanceRow } from "@/components/balance/BalanceRow";
 import { TrendLoader } from "@/components/TrendLoader";
 import { useBalanceSnapshots } from "@/hooks/useBalanceSnapshots";
+import { useI18n } from "@/i18n/I18nContext";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -21,6 +22,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-nati
 export default function BalanceScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   const { snapshots, loading, error, load, confirmDelete } =
     useBalanceSnapshots();
 
@@ -28,7 +30,7 @@ export default function BalanceScreen() {
     return (
       <View style={styles.center}>
         <TrendLoader />
-        <Text style={styles.muted}>Загрузка баланса…</Text>
+        <Text style={styles.muted}>{t("balance.loading")}</Text>
       </View>
     );
   }
@@ -36,10 +38,10 @@ export default function BalanceScreen() {
   if (error && snapshots.length === 0) {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorTitle}>Не удалось загрузить</Text>
+        <Text style={styles.errorTitle}>{t("common.loadFailed")}</Text>
         <Text style={styles.muted}>{error}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={load}>
-          <Text style={styles.retryButtonText}>Повторить</Text>
+          <Text style={styles.retryButtonText}>{t("common.retry")}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -55,28 +57,27 @@ export default function BalanceScreen() {
     >
       <BalanceForm onSaved={load} />
 
-      <Text style={styles.title}>Спот-баланс</Text>
+      <Text style={styles.title}>{t("balance.spotTitle")}</Text>
       {spot.length === 0 ? (
-        <Text style={styles.empty}>Нет записей</Text>
+        <Text style={styles.empty}>{t("balance.empty")}</Text>
       ) : (
         spot.map((s) => (
           <BalanceRow key={s.id} snapshot={s} onDelete={confirmDelete} />
         ))
       )}
 
-      <Text style={[styles.title, { marginTop: 24 }]}>Фьючерсный депозит</Text>
+      <Text style={[styles.title, { marginTop: 24 }]}>
+        {t("balance.futuresTitle")}
+      </Text>
       {futures.length === 0 ? (
-        <Text style={styles.empty}>Нет записей</Text>
+        <Text style={styles.empty}>{t("balance.empty")}</Text>
       ) : (
         futures.map((s) => (
           <BalanceRow key={s.id} snapshot={s} onDelete={confirmDelete} />
         ))
       )}
 
-      <Text style={styles.hint}>
-        Долгое нажатие на записи — удаление. Одна запись на тип и дату
-        (повторное сохранение обновляет её).
-      </Text>
+      <Text style={styles.hint}>{t("balance.hint")}</Text>
     </ScrollView>
   );
 }

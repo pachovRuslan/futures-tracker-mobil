@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useI18n } from "@/i18n/I18nContext";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
 import {
@@ -27,6 +28,7 @@ interface SyncAllBoxProps {
 export function SyncAllBox({ syncing, syncMsg, onSyncAll }: SyncAllBoxProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   return (
     <View style={styles.syncBox}>
       <TouchableOpacity
@@ -42,7 +44,7 @@ export function SyncAllBox({ syncing, syncMsg, onSyncAll }: SyncAllBoxProps) {
         ) : (
           <>
             <Ionicons name="sync" size={14} color={colors.accent} />
-            <Text style={styles.syncButtonText}>Синк все биржи</Text>
+            <Text style={styles.syncButtonText}>{t("conn.syncAll")}</Text>
           </>
         )}
       </TouchableOpacity>

@@ -1,4 +1,6 @@
 import { useAuth } from "@/context/AuthContext";
+import { useI18n } from "@/i18n/I18nContext";
+import { LanguageSelect } from "@/i18n/LanguageSelect";
 import { useSubscription } from "@/hooks/useSubscription";
 import { getSupabase } from "@/services/auth";
 import { resetPurchases, syncEntitlementToServer } from "@/services/purchases";
@@ -22,16 +24,19 @@ import {
 } from "react-native";
 
 /** Варианты темы оформления (порядок = порядок кнопок в сегменте). */
-const THEME_MODES: Array<{ value: ThemeMode; label: string }> = [
-  { value: "system", label: "Системная" },
-  { value: "light", label: "Светлая" },
-  { value: "dark", label: "Тёмная" },
+const THEME_MODES = (
+  t: ReturnType<typeof useI18n>["t"],
+): Array<{ value: ThemeMode; label: string }> => [
+  { value: "system", label: t("settings.themeSystem") },
+  { value: "light", label: t("settings.themeLight") },
+  { value: "dark", label: t("settings.themeDark") },
 ];
 
 export default function SettingsScreen() {
   const { colors, mode: themeMode, setMode: setThemeMode } = useTheme();
   const styles = createStyles(colors);
   const { user, logout } = useAuth();
+  const { t } = useI18n();
   const { isPremium, loading: subLoading, refresh: refreshSubscription } =
     useSubscription();
   const router = useRouter();
@@ -62,7 +67,7 @@ export default function SettingsScreen() {
       // Дальше RootNavigator сам уведёт на /login (user = null).
     } catch (e) {
       Alert.alert(
-        "Не удалось удалить аккаунт",
+        t("settings.deleteFailed"),
         e instanceof Error ? e.message : String(e),
       );
       setDeleting(false);
@@ -71,12 +76,12 @@ export default function SettingsScreen() {
 
   const handleDeleteAccount = () => {
     Alert.alert(
-      "Удалить аккаунт?",
-      "Будут безвозвратно удалены: профиль, все сделки, снимки баланса, подключения бирж и подписка Premium. Это действие нельзя отменить.",
+      t("settings.deleteTitle"),
+      t("settings.deleteMsg"),
       [
-        { text: "Отмена", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Удалить навсегда",
+          text: t("settings.deleteForever"),
           style: "destructive",
           onPress: () => {
             void confirmDeleteAccount();
@@ -108,10 +113,12 @@ export default function SettingsScreen() {
       // allowlist живут в user_entitlements, RC для них не нужен.
       await refreshSubscription(true).catch(() => {});
       Alert.alert(
-        "Сверка подписки",
+        t("settings.devSyncTitle"),
         syncError != null
-          ? `Сервер/RC недоступны (${syncError}).\nСтатус перечитан из user_entitlements — смотрите бейдж.`
-          : `RevenueCat: premium=${rcPremium ? "true" : "false"}.\nСтатус в приложении обновлён — смотрите бейдж.`,
+          ? t("settings.devSyncError", { error: syncError })
+          : t("settings.devSyncOk", {
+              premium: rcPremium ? "true" : "false",
+            }),
       );
     } finally {
       setDebugSyncing(false);
@@ -137,7 +144,7 @@ export default function SettingsScreen() {
           style={styles.upgradeButton}
           onPress={() => router.push("/paywall")}
         >
-          <Text style={styles.upgradeText}>Перейти на Premium</Text>
+          <Text style={styles.upgradeText}>{t("common.upgrade")}</Text>
         </TouchableOpacity>
       )}
 
@@ -147,9 +154,7 @@ export default function SettingsScreen() {
           onPress={debugSyncSubscription}
           disabled={debugSyncing}
         >
-          <Text style={styles.debugMenuText}>
-            DEV · Сверить подписку с магазином
-          </Text>
+          <Text style={styles.debugMenuText}>{t("settings.devSync")}</Text>
           {debugSyncing ? (
             <ActivityIndicator size="small" color={colors.accent} />
           ) : (
@@ -173,7 +178,7 @@ export default function SettingsScreen() {
             }
           }}
         >
-          <Text style={styles.menuText}>Подключения бирж</Text>
+          <Text style={styles.menuText}>{t("settings.connections")}</Text>
           <Text style={styles.arrow}>→</Text>
         </TouchableOpacity>
       )}
@@ -181,9 +186,9 @@ export default function SettingsScreen() {
       {/* Тема оформления: системная / светлая / тёмная. Выбор
           переживает перезапуск (SecureStore / localStorage). */}
       <View style={styles.themeCard}>
-        <Text style={styles.themeLabel}>Тема оформления</Text>
+        <Text style={styles.themeLabel}>{t("settings.themeTitle")}</Text>
         <View style={styles.themeSegment}>
-          {THEME_MODES.map(({ value, label }) => {
+          {THEME_MODES(t).map(({ value, label }) => {
             const active = themeMode === value;
             return (
               <TouchableOpacity
@@ -205,11 +210,17 @@ export default function SettingsScreen() {
         </View>
       </View>
 
+      {/* Язык интерфейса: тот же выбор, что на экране входа. */}
+      <View style={styles.themeCard}>
+        <Text style={styles.themeLabel}>{t("settings.language")}</Text>
+        <LanguageSelect />
+      </View>
+
       <TouchableOpacity
         style={styles.menuItem}
         onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
       >
-        <Text style={styles.menuText}>Политика конфиденциальности</Text>
+        <Text style={styles.menuText}>{t("common.privacy")}</Text>
         <Text style={styles.arrow}>→</Text>
       </TouchableOpacity>
 
@@ -217,7 +228,7 @@ export default function SettingsScreen() {
         style={styles.menuItem}
         onPress={() => Linking.openURL(TERMS_OF_USE_URL)}
       >
-        <Text style={styles.menuText}>Условия использования</Text>
+        <Text style={styles.menuText}>{t("common.terms")}</Text>
         <Text style={styles.arrow}>→</Text>
       </TouchableOpacity>
 
@@ -231,7 +242,7 @@ export default function SettingsScreen() {
           }
         }}
       >
-        <Text style={styles.logoutText}>Выйти</Text>
+        <Text style={styles.logoutText}>{t("settings.logout")}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -242,7 +253,7 @@ export default function SettingsScreen() {
         {deleting ? (
           <ActivityIndicator size="small" color={colors.loss} />
         ) : (
-          <Text style={styles.deleteText}>Удалить аккаунт</Text>
+          <Text style={styles.deleteText}>{t("settings.deleteAccount")}</Text>
         )}
       </TouchableOpacity>
     </View>

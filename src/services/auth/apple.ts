@@ -1,4 +1,5 @@
 import { getSupabase } from "./client";
+import { t } from "@/i18n";
 import * as Crypto from "expo-crypto";
 import { Platform } from "react-native";
 
@@ -21,14 +22,12 @@ export function getAppleAuthentication():
 export async function signInWithApple(): Promise<void> {
   const Apple = getAppleAuthentication();
   if (!Apple) {
-    throw new Error("Sign in with Apple доступен только на iOS");
+    throw new Error(t("auth.errAppleIosOnly"));
   }
 
   const available = await Apple.isAvailableAsync();
   if (!available) {
-    throw new Error(
-      "Apple ID не настроен на устройстве (Настройки → [имя] → Вход с Apple).",
-    );
+    throw new Error(t("auth.errAppleNotConfigured"));
   }
 
   const rawNonce = Crypto.randomUUID().replace(/-/g, "");
@@ -46,7 +45,7 @@ export async function signInWithApple(): Promise<void> {
   });
 
   if (!credential.identityToken) {
-    throw new Error("Apple не вернул identity token — попробуйте ещё раз");
+    throw new Error(t("auth.errAppleNoToken"));
   }
 
   const supabase = getSupabase();

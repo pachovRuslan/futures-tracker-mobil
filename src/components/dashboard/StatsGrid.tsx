@@ -1,4 +1,5 @@
 import { fmt, fmtPnl } from "@/shared/trade-model";
+import { useI18n } from "@/i18n/I18nContext";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -31,24 +32,27 @@ export function StatsGrid({
 }: StatsGridProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   return (
     <View style={styles.gridSection}>
       <View style={styles.gridHeaderRow}>
-        <Text style={styles.gridHeaderTitle}>СТАТИСТИКА {monthTitle}</Text>
+        <Text style={styles.gridHeaderTitle}>
+          {t("dash.statsTitle", { month: monthTitle })}
+        </Text>
         {selectedMonth && (
           <Pressable onPress={onResetMonth}>
-            <Text style={styles.gridHeaderLink}>Сбросить месяц</Text>
+            <Text style={styles.gridHeaderLink}>{t("dash.resetMonth")}</Text>
           </Pressable>
         )}
       </View>
       <View style={styles.grid}>
         <View style={styles.gridRow}>
           <View style={styles.cell}>
-            <Text style={styles.cellLabel}>СДЕЛОК</Text>
+            <Text style={styles.cellLabel}>{t("stat.trades")}</Text>
             <Text style={styles.cellValue}>{month.count}</Text>
           </View>
           <View style={styles.cell}>
-            <Text style={styles.cellLabel}>ПРИБЫЛЬ / УБЫТОК</Text>
+            <Text style={styles.cellLabel}>{t("stat.profitLoss")}</Text>
             <Text style={[styles.cellValueSmall, { color: colors.profit }]}>
               +{fmt(month.grossProfit)}
             </Text>
@@ -57,14 +61,14 @@ export function StatsGrid({
             </Text>
           </View>
           <View style={styles.cell}>
-            <Text style={styles.cellLabel}>WIN-RATE</Text>
+            <Text style={styles.cellLabel}>{t("stat.winRate")}</Text>
             <Text style={styles.cellValue}>{month.winRate.toFixed(1)}%</Text>
           </View>
         </View>
 
         <View style={styles.gridRow}>
           <View style={styles.cell}>
-            <Text style={styles.cellLabel}>ИТОГ МЕСЯЦА</Text>
+            <Text style={styles.cellLabel}>{t("stat.monthTotal")}</Text>
             <Text
               style={[
                 styles.cellValue,
@@ -82,13 +86,13 @@ export function StatsGrid({
             </Text>
           </View>
           <View style={styles.cell}>
-            <Text style={styles.cellLabel}>ОБЩАЯ ПРИБЫЛЬ</Text>
+            <Text style={styles.cellLabel}>{t("stat.totalProfit")}</Text>
             <Text style={[styles.cellValue, { color: colors.profit }]}>
               +{fmt(allTime.grossProfit)}
             </Text>
           </View>
           <View style={styles.cell}>
-            <Text style={styles.cellLabel}>ОБЩИЙ УБЫТОК</Text>
+            <Text style={styles.cellLabel}>{t("stat.totalLoss")}</Text>
             <Text style={[styles.cellValue, { color: colors.loss }]}>
               −{fmt(Math.abs(allTime.grossLoss))}
             </Text>
@@ -97,13 +101,13 @@ export function StatsGrid({
 
         <View style={styles.gridRow}>
           <View style={styles.cell}>
-            <Text style={styles.cellLabel}>КОМИССИИ</Text>
+            <Text style={styles.cellLabel}>{t("stat.fees")}</Text>
             <Text style={[styles.cellValue, { color: colors.loss }]}>
               −{fmt(allTime.fees)}
             </Text>
           </View>
           <View style={styles.cell}>
-            <Text style={styles.cellLabel}>ФАНДИНГ</Text>
+            <Text style={styles.cellLabel}>{t("stat.funding")}</Text>
             <Text
               style={[
                 styles.cellValue,
@@ -121,7 +125,7 @@ export function StatsGrid({
             </Text>
           </View>
           <View style={styles.cell}>
-            <Text style={styles.cellLabel}>WIN-RATE ЗА ВСЁ ВРЕМЯ</Text>
+            <Text style={styles.cellLabel}>{t("stat.winRateAll")}</Text>
             <Text style={styles.cellValue}>{allTime.winRate.toFixed(1)}%</Text>
           </View>
         </View>

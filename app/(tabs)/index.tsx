@@ -9,6 +9,7 @@ import { StatsGrid } from "@/components/dashboard/StatsGrid";
 import { TrendLoader } from "@/components/TrendLoader";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { useDashboardSync } from "@/hooks/useDashboardSync";
+import { useI18n } from "@/i18n/I18nContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { FREE_TRADE_LIMIT } from "@/shared/config";
 import type { ThemeColors } from "@/theme/colors";
@@ -37,6 +38,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 export default function DashboardScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isPremium, entitlement, loading: subLoading } = useSubscription();
@@ -96,7 +98,7 @@ export default function DashboardScreen() {
     return (
       <View style={[styles.center, { paddingTop: insets.top + 24 }]}>
         <TrendLoader />
-        <Text style={styles.muted}>Загрузка дашборда…</Text>
+        <Text style={styles.muted}>{t("dash.loading")}</Text>
       </View>
     );
   }
@@ -104,10 +106,10 @@ export default function DashboardScreen() {
   if (state === "error" && !trades.length) {
     return (
       <View style={[styles.center, { paddingTop: insets.top + 24 }]}>
-        <Text style={styles.errorTitle}>Не удалось загрузить</Text>
+        <Text style={styles.errorTitle}>{t("common.loadFailed")}</Text>
         <Text style={styles.muted}>{errorMsg}</Text>
         <Pressable style={styles.retryButton} onPress={() => loadDashboard()}>
-          <Text style={styles.retryButtonText}>Повторить</Text>
+          <Text style={styles.retryButtonText}>{t("common.retry")}</Text>
         </Pressable>
       </View>
     );

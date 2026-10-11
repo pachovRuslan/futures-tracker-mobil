@@ -1,6 +1,8 @@
 import { useAuth } from "@/context/AuthContext";
+import { useI18n } from "@/i18n/I18nContext";
 import { getSupabase } from "@/services/auth";
 import { TRADES_PAGE_SIZE } from "@/shared/config";
+import type { TranslationKey } from "@/i18n/translations";
 import type { TradeRow } from "@/shared/types";
 import { tradeNetPnl } from "@/shared/trade-model";
 import { useFocusEffect } from "expo-router";
@@ -102,19 +104,20 @@ function aggregateClosedToStats(rows: ClosedRow[]): StatsRow[] {
   return Array.from(map.values());
 }
 
-const MONTH_LABELS = [
-  "ЯНВ",
-  "ФЕВ",
-  "МАР",
-  "АПР",
-  "МАЙ",
-  "ИЮН",
-  "ИЮЛ",
-  "АВГ",
-  "СЕН",
-  "ОКТ",
-  "НОЯ",
-  "ДЕК",
+/** Подписи месяцев бара-чарта по языку (ЯНВ… / JAN…). */
+const MONTH_KEYS: ReadonlyArray<TranslationKey> = [
+  "month.1",
+  "month.2",
+  "month.3",
+  "month.4",
+  "month.5",
+  "month.6",
+  "month.7",
+  "month.8",
+  "month.9",
+  "month.10",
+  "month.11",
+  "month.12",
 ];
 
 const monthKey = (d: Date) =>
@@ -186,6 +189,7 @@ export function useDashboardStats(
   selectedMonth: string | null,
 ): UseDashboardStatsResult {
   const { user } = useAuth();
+  const { t } = useI18n();
 
   const [trades, setTrades] = useState<TradeRow[]>([]);
   /** Агрегаты биржа × месяц: из RPC get_trade_stats (по ВСЕМ сделкам)
@@ -266,11 +270,11 @@ export function useDashboardStats(
       } catch (e) {
         if (!mountedRef.current) return;
         if (__DEV__) console.error("[Dashboard] load error:", e);
-        setErrorMsg(e instanceof Error ? e.message : "Неизвестная ошибка");
+        setErrorMsg(e instanceof Error ? e.message : t("errorScreen.unknown"));
         setState("error");
       }
     },
-    [user?.id],
+    [user?.id, t],
   );
 
   // Перезагрузка при каждом появлении экрана (после добавления сделки,
@@ -402,13 +406,13 @@ export function useDashboardStats(
       const key = monthKey(d);
       series.push({
         key,
-        label: MONTH_LABELS[d.getMonth()],
+        label: t(MONTH_KEYS[d.getMonth()]),
         value: byMonth.get(key) ?? 0,
         isCurrent: key === curMonthKey,
       });
     }
     return series;
-  }, [filteredRows, now, curMonthKey]);
+  }, [filteredRows, now, curMonthKey, t]);
 
   return {
     state,

@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useI18n } from "@/i18n/I18nContext";
 import { useTheme } from "@/theme/ThemeContext";
 import { Tabs } from "expo-router";
 import type { ColorValue } from "react-native";
@@ -16,6 +17,7 @@ const tabIcon =
 
 export default function TabsLayout() {
   const { colors } = useTheme();
+  const { t } = useI18n();
   return (
     <Tabs
       screenOptions={{
@@ -36,22 +38,22 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Дашборд",
+          title: t("tabs.dashboard"),
           headerShown: false,
           tabBarIcon: tabIcon("stats-chart"),
         }}
       />
       <Tabs.Screen
         name="trades"
-        options={{ title: "Сделки", tabBarIcon: tabIcon("swap-horizontal") }}
+        options={{ title: t("tabs.trades"), tabBarIcon: tabIcon("swap-horizontal") }}
       />
       <Tabs.Screen
         name="balance"
-        options={{ title: "Баланс", tabBarIcon: tabIcon("wallet") }}
+        options={{ title: t("tabs.balance"), tabBarIcon: tabIcon("wallet") }}
       />
       <Tabs.Screen
         name="settings"
-        options={{ title: "Настройки", tabBarIcon: tabIcon("settings") }}
+        options={{ title: t("tabs.settings"), tabBarIcon: tabIcon("settings") }}
       />
     </Tabs>
   );

@@ -1,4 +1,6 @@
 import { useAuth } from "@/context/AuthContext";
+import { useI18n } from "@/i18n/I18nContext";
+import { LanguageSelect } from "@/i18n/LanguageSelect";
 import { getAppleAuthentication } from "@/services/auth";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
@@ -29,6 +31,7 @@ export default function LoginScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const { login, loginApple } = useAuth();
+  const { t } = useI18n();
   const [loading, setLoading] = useState(false);
   const [appleAvailable, setAppleAvailable] = useState(false);
 
@@ -53,8 +56,8 @@ export default function LoginScreen() {
       // Сессия установится через onAuthStateChange → AuthProvider обновит user
       // → RootNavigator сделает redirect на "/".
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Не удалось войти";
-      Alert.alert("Ошибка входа", msg);
+      const msg = e instanceof Error ? e.message : t("login.errorFallback");
+      Alert.alert(t("login.errorTitle"), msg);
     } finally {
       setLoading(false);
     }
@@ -70,7 +73,7 @@ export default function LoginScreen() {
       // Отмена нативного шита Apple — не ошибка, молча выходим
       // (поведение как у отмены браузера в Google-флоу).
       if (msg.includes("ERR_REQUEST_CANCELED")) return;
-      Alert.alert("Ошибка входа", msg);
+      Alert.alert(t("login.errorTitle"), msg);
     } finally {
       setLoading(false);
     }
@@ -79,8 +82,11 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.card}>
+        {/* Выбор языка: до авторизации пользователь выбирает язык
+            интерфейса (сохраняется, дальше меняется в настройках). */}
+        <LanguageSelect />
         <Text style={styles.title}>FUTURES TRACKER</Text>
-        <Text style={styles.subtitle}>Личный трекер фьючерсных сделок</Text>
+        <Text style={styles.subtitle}>{t("login.subtitle")}</Text>
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleLogin}
@@ -90,7 +96,7 @@ export default function LoginScreen() {
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.buttonText}>Войти через Google</Text>
+            <Text style={styles.buttonText}>{t("login.google")}</Text>
           )}
         </TouchableOpacity>
 
@@ -111,9 +117,7 @@ export default function LoginScreen() {
           </View>
         ) : null}
 
-        <Text style={styles.hint}>
-          Вход только для пользователей из allowlist
-        </Text>
+        <Text style={styles.hint}>{t("login.hint")}</Text>
       </View>
     </SafeAreaView>
   );

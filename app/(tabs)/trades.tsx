@@ -1,4 +1,5 @@
 import { TrendLoader } from "@/components/TrendLoader";
+import { useI18n } from "@/i18n/I18nContext";
 import { useTrades } from "@/hooks/useTrades";
 import { getSupabase } from "@/services/auth";
 import { fmtDate, fmtPnl, tradeNetPnl } from "@/shared/trade-model";
@@ -19,76 +20,82 @@ import {
 export default function TradesScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   const { trades, loading, error, reload } = useTrades();
   const router = useRouter();
 
   // ── Действия по тапу на сделку (волна 2: раньше список был read-only).
   // Семантика — как на сайте: полное редактирование и удаление только
   // для manual (синканные перезапишет следующий синк), заметки — любым.
+  // Параметр строки переименован в tr: буква t теперь занята переводом.
   const confirmDelete = useCallback(
-    (t: TradeRow) => {
-      Alert.alert("Удалить сделку?", `${t.symbol} — действие необратимо.`, [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Удалить",
-          style: "destructive",
-          onPress: async () => {
-            const { error: deleteError } = await getSupabase()
-              .from("trades")
-              .delete()
-              .eq("id", t.id);
-            if (deleteError) {
-              Alert.alert("Ошибка", deleteError.message);
-              return;
-            }
-            reload();
+    (tr: TradeRow) => {
+      Alert.alert(
+        t("trades.deleteTitle"),
+        t("trades.deleteMsg", { symbol: tr.symbol }),
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("common.delete"),
+            style: "destructive",
+            onPress: async () => {
+              const { error: deleteError } = await getSupabase()
+                .from("trades")
+                .delete()
+                .eq("id", tr.id);
+              if (deleteError) {
+                Alert.alert(t("common.error"), deleteError.message);
+                return;
+              }
+              reload();
+            },
           },
-        },
-      ]);
+        ],
+      );
     },
-    [reload],
+    [reload, t],
   );
 
   const openActions = useCallback(
-    (t: TradeRow) => {
-      const title = `${t.symbol} · ${fmtPnl(tradeNetPnl(t))}`;
-      const message = `${EXCHANGE_LABELS[t.exchange] ?? t.exchange} · ${fmtDate(t.closed_at)}`;
-      if (t.exchange === "manual") {
+    (tr: TradeRow) => {
+      const title = `${tr.symbol} · ${fmtPnl(tradeNetPnl(tr))}`;
+      const message = `${EXCHANGE_LABELS[tr.exchange] ?? tr.exchange} · ${fmtDate(tr.closed_at)}`;
+      if (tr.exchange === "manual") {
         // Android показывает максимум 3 кнопки — ровно столько и кладём.
         Alert.alert(title, message, [
           {
-            text: "Редактировать",
-            onPress: () => router.push(`/trade/edit?id=${t.id}`),
+            text: t("trades.editAction"),
+            onPress: () => router.push(`/trade/edit?id=${tr.id}`),
           },
           {
-            text: "Удалить",
+            text: t("common.delete"),
             style: "destructive",
-            onPress: () => confirmDelete(t),
+            onPress: () => confirmDelete(tr),
           },
-          { text: "Отмена", style: "cancel" },
+          { text: t("common.cancel"), style: "cancel" },
         ]);
       } else {
         Alert.alert(title, message, [
           {
-            text: "Изменить заметку",
-            onPress: () => router.push(`/trade/edit?id=${t.id}`),
+            text: t("trades.noteAction"),
+            onPress: () => router.push(`/trade/edit?id=${tr.id}`),
           },
-          { text: "Отмена", style: "cancel" },
+          { text: t("common.cancel"), style: "cancel" },
         ]);
       }
     },
-    [router, confirmDelete],
+    [router, confirmDelete, t],
   );
 
   const renderItem = useCallback(
-    ({ item: t }: { item: TradeRow }) => {
-      const net = tradeNetPnl(t);
-      const isLong = t.side === "long";
+    ({ item: tr }: { item: TradeRow }) => {
+      const net = tradeNetPnl(tr);
+      const isLong = tr.side === "long";
       return (
         <TouchableOpacity
           style={styles.row}
           activeOpacity={0.7}
-          onPress={() => openActions(t)}
+          onPress={() => openActions(tr)}
         >
           <View style={styles.left}>
             <View
@@ -108,14 +115,14 @@ export default function TradesScreen() {
             </View>
             <View style={styles.leftText}>
               <View style={styles.symbolRow}>
-                <Text style={styles.symbol}>{t.symbol}</Text>
+                <Text style={styles.symbol}>{tr.symbol}</Text>
                 <View style={styles.exchangeTag}>
                   <Text style={styles.exchangeTagText}>
-                    {EXCHANGE_LABELS[t.exchange] ?? t.exchange}
+                    {EXCHANGE_LABELS[tr.exchange] ?? tr.exchange}
                   </Text>
                 </View>
               </View>
-              <Text style={styles.exchange}>{fmtDate(t.closed_at)}</Text>
+              <Text style={styles.exchange}>{fmtDate(tr.closed_at)}</Text>
             </View>
           </View>
           <Text
@@ -136,15 +143,15 @@ export default function TradesScreen() {
 
   const keyExtractor = useCallback((item: TradeRow) => item.id, []);
   const ListEmptyComponent = useMemo(
-    () => <Text style={styles.empty}>Сделок пока нет</Text>,
-    [styles],
+    () => <Text style={styles.empty}>{t("trades.empty")}</Text>,
+    [styles, t],
   );
 
   if (loading && trades.length === 0) {
     return (
       <View style={styles.center}>
         <TrendLoader />
-        <Text style={styles.muted}>Загрузка сделок…</Text>
+        <Text style={styles.muted}>{t("trades.loading")}</Text>
       </View>
     );
   }
@@ -152,10 +159,10 @@ export default function TradesScreen() {
   if (error && trades.length === 0) {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorTitle}>Не удалось загрузить</Text>
+        <Text style={styles.errorTitle}>{t("common.loadFailed")}</Text>
         <Text style={styles.muted}>{error}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={reload}>
-          <Text style={styles.retryButtonText}>Повторить</Text>
+          <Text style={styles.retryButtonText}>{t("common.retry")}</Text>
         </TouchableOpacity>
       </View>
     );

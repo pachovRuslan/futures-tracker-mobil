@@ -1,44 +1,47 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useI18n } from "@/i18n/I18nContext";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
 import { StyleSheet, Text, View } from "react-native";
+import type { TranslationKey } from "@/i18n/translations";
 
 /** Только реально существующие возможности Premium (см. REFACTORING.md). */
-const FEATURES: Array<{
+const FEATURES: ReadonlyArray<{
   icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  desc: string;
+  titleKey: TranslationKey;
+  descKey: TranslationKey;
 }> = [
   {
     icon: "sync",
-    title: "Авто-синк бирж",
-    desc: "Подключите API-ключи — Binance, Bybit, Bitget, MEXC, BingX подтянут сделки сами",
+    titleKey: "feature.syncTitle",
+    descKey: "feature.syncDesc",
   },
   {
     icon: "infinite",
-    title: "Безлимит сделок",
-    desc: "FREE — до 50 сделок, Premium — без ограничений",
+    titleKey: "feature.unlimitedTitle",
+    descKey: "feature.unlimitedDesc",
   },
 ];
 
 /**
  * FeaturesCard — карточка «что входит в Premium». Выделено из
  * app/paywall.tsx при декомпозиции; данные, разметка и стили перенесены
- * без изменений.
+ * без изменений (кроме i18n: тексты теперь по ключам).
  */
 export function FeaturesCard() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   return (
     <View style={styles.featuresCard}>
       {FEATURES.map((f) => (
-        <View key={f.title} style={styles.featureRow}>
+        <View key={f.titleKey} style={styles.featureRow}>
           <View style={styles.featureIcon}>
             <Ionicons name={f.icon} size={20} color={colors.accent} />
           </View>
           <View style={styles.featureContent}>
-            <Text style={styles.featureTitle}>{f.title}</Text>
-            <Text style={styles.featureDesc}>{f.desc}</Text>
+            <Text style={styles.featureTitle}>{t(f.titleKey)}</Text>
+            <Text style={styles.featureDesc}>{t(f.descKey)}</Text>
           </View>
         </View>
       ))}

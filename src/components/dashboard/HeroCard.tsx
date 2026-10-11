@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { exchangeLabel, plural } from "@/shared/format";
+import { useI18n } from "@/i18n/I18nContext";
+import { exchangeLabel } from "@/shared/format";
 import { fmtPnl } from "@/shared/trade-model";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
@@ -49,6 +50,7 @@ export function HeroCard({
 }: HeroCardProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t, plural } = useI18n();
   const pnlColor = useMemo(() => {
     if (net > 0) return colors.profit;
     if (net < 0) return colors.loss;
@@ -59,7 +61,7 @@ export function HeroCard({
   return (
     <View style={styles.heroCard}>
       <View style={styles.heroHeader}>
-        <Text style={styles.heroLabel}>ИТОГ ПО СДЕЛКАМ</Text>
+        <Text style={styles.heroLabel}>{t("dash.heroLabel")}</Text>
         <Pressable
           style={[
             styles.syncButton,
@@ -68,7 +70,7 @@ export function HeroCard({
           onPress={onSync}
           disabled={syncBusy || refreshing}
           accessibilityRole="button"
-          accessibilityLabel="Синхронизировать сделки с биржами"
+          accessibilityLabel={t("dash.syncA11y")}
         >
           {syncBusy ? (
             <ActivityIndicator size="small" color="#fff" />
@@ -76,7 +78,7 @@ export function HeroCard({
             <Ionicons name="sync" size={14} color="#fff" />
           )}
           <Text style={styles.syncText}>
-            {syncBusy ? "Синк…" : "Синхрон."}
+            {syncBusy ? t("dash.syncing") : t("dash.sync")}
           </Text>
         </Pressable>
       </View>
@@ -86,8 +88,13 @@ export function HeroCard({
       </Text>
       <Text style={styles.heroSub}>
         {exchangeFilter === "all"
-          ? `Все биржи · ${count} ${plural(count, "сделка", "сделки", "сделок")}`
-          : `${exchangeLabel(exchangeFilter)} · ${count} ${plural(count, "сделка", "сделки", "сделок")}`}
+          ? t("dash.allExchanges")
+          : exchangeLabel(exchangeFilter)}{" "}
+        · {count}{" "}
+        {plural(count, {
+          ru: ["сделка", "сделки", "сделок"],
+          en: ["trade", "trades"],
+        })}
       </Text>
       {syncMsg && <Text style={styles.syncStatus}>{syncMsg}</Text>}
     </View>

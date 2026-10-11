@@ -1,4 +1,5 @@
 import type { PaywallBusy } from "@/hooks/usePaywallActions";
+import { useI18n } from "@/i18n/I18nContext";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
 import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
@@ -20,6 +21,7 @@ interface BuyButtonProps {
 export function BuyButton({ busy, selected, onBuy }: BuyButtonProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   return (
     <Pressable
       style={[styles.buyButton, busy === "buy" && styles.buttonDisabled]}
@@ -30,7 +32,7 @@ export function BuyButton({ busy, selected, onBuy }: BuyButtonProps) {
         <ActivityIndicator color="#fff" />
       ) : (
         <Text style={styles.buyButtonText}>
-          Подписаться за {selected?.product.priceString ?? ""}
+          {t("paywall.buyFor", { price: selected?.product.priceString ?? "" })}
         </Text>
       )}
     </Pressable>

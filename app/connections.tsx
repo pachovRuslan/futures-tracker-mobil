@@ -4,6 +4,7 @@ import { ExchangeRow } from "@/components/connections/ExchangeRow";
 import { SyncAllBox } from "@/components/connections/SyncAllBox";
 import { useConnectionsSync } from "@/hooks/useConnectionsSync";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useI18n } from "@/i18n/I18nContext";
 import { api, isPremiumRequired } from "@/services/api";
 import { EXCHANGE_CONNECTIONS_ENABLED } from "@/shared/config";
 import type { ApiExchange, Connection } from "@/shared/types";
@@ -25,6 +26,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 export default function ConnectionsScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isPremium, loading: entitlementLoading } = useSubscription();
@@ -93,17 +95,19 @@ export default function ConnectionsScreen() {
   }, [entitlementLoading, isPremium, load]);
 
   const disconnect = (ex: ApiExchange) => {
-    Alert.alert("Отключить", `Отключить ${EXCHANGE_LABELS[ex]}?`, [
-      { text: "Отмена" },
+    Alert.alert(t("conn.disconnect"), t("conn.disconnectMsg", {
+      exchange: EXCHANGE_LABELS[ex],
+    }), [
+      { text: t("common.cancel") },
       {
-        text: "Да",
+        text: t("common.yes"),
         onPress: async () => {
           try {
             await api.deleteConnection(ex);
             await load();
           } catch (e) {
             Alert.alert(
-              "Ошибка",
+              t("common.error"),
               e instanceof Error ? e.message : String(e),
             );
           }
@@ -119,7 +123,7 @@ export default function ConnectionsScreen() {
     return (
       <View style={styles.center}>
         <TrendLoader />
-        <Text style={styles.muted}>Загрузка подключений…</Text>
+        <Text style={styles.muted}>{t("conn.loading")}</Text>
       </View>
     );
   }
@@ -129,12 +133,12 @@ export default function ConnectionsScreen() {
       style={styles.container}
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
     >
-      <Text style={styles.title}>Подключения</Text>
+      <Text style={styles.title}>{t("conn.title")}</Text>
       {error && (
         <View style={styles.errorBox}>
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={load}>
-            <Text style={styles.retryButtonText}>Повторить</Text>
+            <Text style={styles.retryButtonText}>{t("common.retry")}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -159,7 +163,7 @@ export default function ConnectionsScreen() {
         );
       })}
 
-      <Text style={[styles.title, { marginTop: 24 }]}>Добавить</Text>
+      <Text style={[styles.title, { marginTop: 24 }]}>{t("conn.add")}</Text>
       <AddConnectionForm onSaved={load} />
     </ScrollView>
   );

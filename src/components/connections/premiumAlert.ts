@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import { t } from "@/i18n";
 import { Alert } from "react-native";
 
 type Router = ReturnType<typeof useRouter>;
@@ -9,16 +10,17 @@ type Router = ReturnType<typeof useRouter>;
  * пользователь был на экране подключений — гейт работает и на сервере).
  *
  * Выделено из app/connections.tsx при декомпозиции: один и тот же алерт
- * нужен и форме добавления ключа, и ручному синку.
+ * нужен и форме добавления ключа, и ручному синку. Перевод — standalone
+ * t (вызов происходит в момент действия, язык уже актуален).
  */
 export function premiumAlert(router: Router): void {
   Alert.alert(
-    "Требуется Premium",
-    "Подключения бирж и авто-синк доступны по подписке Premium.",
+    t("premium.requiredTitle"),
+    t("premium.requiredMsg"),
     [
-      { text: "Позже", style: "cancel" },
+      { text: t("common.later"), style: "cancel" },
       {
-        text: "Перейти на Premium",
+        text: t("common.upgrade"),
         onPress: () => router.push("/paywall"),
       },
     ],

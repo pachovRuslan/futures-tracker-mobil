@@ -1,4 +1,5 @@
 import { premiumAlert } from "@/components/connections/premiumAlert";
+import { useI18n } from "@/i18n/I18nContext";
 import { api, isPremiumRequired } from "@/services/api";
 import type { ApiExchange, Connection } from "@/shared/types";
 import { EXCHANGES, EXCHANGE_LABELS } from "@/shared/types";
@@ -16,6 +17,7 @@ import { useEffect, useRef, useState } from "react";
  */
 export function useConnectionsSync(connections: Connection[]) {
   const router = useRouter();
+  const { t } = useI18n();
   /** Идентификатор активного синка: биржа или "all"; null — не идёт. */
   const [syncing, setSyncing] = useState<string | null>(null);
   /** Строка статуса синка (прогресс/итог) под кнопкой «Синк все». */
@@ -32,17 +34,22 @@ export function useConnectionsSync(connections: Connection[]) {
   const syncOne = async (ex: ApiExchange): Promise<void> => {
     if (syncing) return;
     setSyncing(ex);
-    setSyncMsg(`Синк ${EXCHANGE_LABELS[ex]}…`);
+    setSyncMsg(t("sync.syncingOne", { exchange: EXCHANGE_LABELS[ex] }));
     try {
       const data = await api.syncExchange(ex);
       if (!mountedRef.current) return;
       if (data.ok) {
         setSyncMsg(
-          `${EXCHANGE_LABELS[ex]}: обновлено ${data.upserted ?? 0} записей`,
+          t("sync.doneOne", {
+            exchange: EXCHANGE_LABELS[ex],
+            count: data.upserted ?? 0,
+          }),
         );
       } else {
         setSyncMsg(
-          `${EXCHANGE_LABELS[ex]}: ${data.error ?? data.message ?? "не удалось"}`,
+          `${EXCHANGE_LABELS[ex]}: ${
+            data.error ?? data.message ?? t("sync.failShort2")
+          }`,
         );
       }
     } catch (e) {
@@ -64,7 +71,7 @@ export function useConnectionsSync(connections: Connection[]) {
       .map((c) => c.exchange)
       .filter((ex) => EXCHANGES.includes(ex));
     if (connected.length === 0) {
-      setSyncMsg("Нет подключённых бирж — добавьте ключ ниже.");
+      setSyncMsg(t("sync.noConnectionsConn"));
       return;
     }
 
@@ -75,14 +82,20 @@ export function useConnectionsSync(connections: Connection[]) {
       for (let i = 0; i < connected.length; i++) {
         const ex = connected[i];
         setSyncMsg(
-          `Синк: ${EXCHANGE_LABELS[ex]} (${i + 1}/${connected.length})…`,
+          t("sync.progress", {
+            exchange: EXCHANGE_LABELS[ex],
+            i: i + 1,
+            n: connected.length,
+          }),
         );
         try {
           const data = await api.syncExchange(ex);
           if (data.ok) {
             upserted += data.upserted ?? 0;
           } else {
-            errors.push(`${EXCHANGE_LABELS[ex]}: ${data.error ?? "сбой"}`);
+            errors.push(
+              `${EXCHANGE_LABELS[ex]}: ${data.error ?? t("sync.failShort")}`,
+            );
           }
         } catch (e) {
           // Гейт сработал посреди последовательности — обрываем всё.
@@ -98,10 +111,13 @@ export function useConnectionsSync(connections: Connection[]) {
       }
       if (!mountedRef.current) return;
       if (errors.length === 0) {
-        setSyncMsg(`Готово — обновлено ${upserted} записей`);
+        setSyncMsg(t("sync.done", { count: upserted }));
       } else {
         setSyncMsg(
-          `Обновлено ${upserted} записей. Ошибки: ${errors.join("; ")}`,
+          t("sync.doneWithErrors", {
+            count: upserted,
+            errors: errors.join("; "),
+          }),
         );
       }
     } finally {

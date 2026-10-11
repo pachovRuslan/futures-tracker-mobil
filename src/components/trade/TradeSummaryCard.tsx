@@ -1,3 +1,4 @@
+import { useI18n } from "@/i18n/I18nContext";
 import { fmtDate, fmtPnl, tradeNetPnl } from "@/shared/trade-model";
 import { EXCHANGE_LABELS } from "@/shared/types";
 import type { TradeRow } from "@/shared/types";
@@ -21,6 +22,7 @@ interface TradeSummaryCardProps {
 export function TradeSummaryCard({ trade }: TradeSummaryCardProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   return (
     <View style={styles.summary}>
       <View style={styles.summaryRow}>
@@ -30,8 +32,9 @@ export function TradeSummaryCard({ trade }: TradeSummaryCardProps) {
         </Text>
       </View>
       <Text style={styles.summaryMeta}>
-        {trade.side === "long" ? "LONG" : "SHORT"} · открыта{" "}
-        {fmtDate(trade.opened_at)} · закрыта {fmtDate(trade.closed_at)}
+        {trade.side === "long" ? "LONG" : "SHORT"} · {t("trade.wordOpened")}{" "}
+        {fmtDate(trade.opened_at)} · {t("trade.wordClosed")}{" "}
+        {fmtDate(trade.closed_at)}
       </Text>
       <Text
         style={[

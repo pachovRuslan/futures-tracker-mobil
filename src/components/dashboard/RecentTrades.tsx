@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import { useI18n } from "@/i18n/I18nContext";
 import { fmtDate, fmtPnl, tradeNetPnl } from "@/shared/trade-model";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
@@ -19,24 +20,25 @@ interface RecentTradesProps {
 export function RecentTrades({ trades }: RecentTradesProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   const router = useRouter();
 
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>ПОСЛЕДНИЕ СДЕЛКИ</Text>
+        <Text style={styles.sectionTitle}>{t("dash.recent")}</Text>
         {trades.length > 0 && (
           <Pressable onPress={() => router.push("/(tabs)/trades")}>
-            <Text style={styles.sectionLink}>Все сделки →</Text>
+            <Text style={styles.sectionLink}>{t("dash.viewAll")}</Text>
           </Pressable>
         )}
       </View>
 
       {trades.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyStateTitle}>Пока нет сделок</Text>
+          <Text style={styles.emptyStateTitle}>{t("dash.emptyTitle")}</Text>
           <Text style={styles.emptyStateDesc}>
-            Нажмите «Сделка», чтобы добавить первую и начать отслеживать P&L
+            {t("dash.emptyDesc")}
           </Text>
         </View>
       ) : (
@@ -87,7 +89,7 @@ export function RecentTrades({ trades }: RecentTradesProps) {
                   </View>
                   <Text style={styles.tradeMeta}>
                     {isOpen
-                      ? "открыта"
+                      ? t("dash.tradeOpen")
                       : fmtDate(trade.closed_at)}
                   </Text>
                 </View>

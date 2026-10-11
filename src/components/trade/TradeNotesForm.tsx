@@ -1,3 +1,4 @@
+import { useI18n } from "@/i18n/I18nContext";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
 import {
@@ -32,17 +33,15 @@ export function TradeNotesForm({
 }: TradeNotesFormProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   return (
     <View style={{ gap: 12 }}>
-      <Text style={styles.hint}>
-        Сделка синхронизируется с биржи — следующий синк перезапишет
-        поля. Доступно редактирование только заметки.
-      </Text>
+      <Text style={styles.hint}>{t("trade.notesHint")}</Text>
       <View style={styles.field}>
-        <Text style={styles.label}>Заметки</Text>
+        <Text style={styles.label}>{t("form.notes")}</Text>
         <TextInput
           style={[styles.input, styles.notesInput]}
-          placeholder="Опционально"
+          placeholder={t("form.notesPlaceholder")}
           placeholderTextColor={colors.textFaint}
           value={notes}
           onChangeText={onChangeNotes}
@@ -54,7 +53,7 @@ export function TradeNotesForm({
         onPress={onSave}
         disabled={saving}
       >
-        <Text style={styles.buttonText}>Сохранить заметку</Text>
+        <Text style={styles.buttonText}>{t("trade.saveNote")}</Text>
       </TouchableOpacity>
     </View>
   );

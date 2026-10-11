@@ -1,12 +1,8 @@
-import {
-  TradeForm,
-  parseNum,
-  tradeDatesFromForm,
-  validateTradeFormValues,
-  type TradeFormValues,
-} from "@/components/TradeForm";
+import { TradeForm, parseNum, tradeDatesFromForm, validateTradeFormValues, type TradeFormValues } from "@/components/TradeForm";
 import { useAuth } from "@/context/AuthContext";
+import { useI18n } from "@/i18n/I18nContext";
 import { getSupabase } from "@/services/auth";
+import { FREE_TRADE_LIMIT } from "@/shared/config";
 import { nowUserDateTime } from "@/shared/datetime";
 import type { TradeInsert } from "@/shared/types";
 import type { ThemeColors } from "@/theme/colors";
@@ -32,14 +28,15 @@ export default function NewTradeScreen() {
   const styles = createStyles(colors);
   const router = useRouter();
   const { user } = useAuth();
+  const { t } = useI18n();
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (values: TradeFormValues) => {
     if (saving || !user?.id) return;
 
-    const validationError = validateTradeFormValues(values);
+    const validationError = validateTradeFormValues(values, t);
     if (validationError) {
-      Alert.alert("Проверьте поля", validationError);
+      Alert.alert(t("trade.checkFields"), validationError);
       return;
     }
 
@@ -71,19 +68,19 @@ export default function NewTradeScreen() {
         // клиентская проверка — лишь UX, бэкенд — источник правды.
         if (error.message.includes("FREE_TRADE_LIMIT_REACHED")) {
           Alert.alert(
-            "Лимит бесплатного плана",
-            "В FREE можно вести до 50 сделок. Premium снимает ограничение.",
+            t("trade.freeLimitTitle"),
+            t("trade.freeLimitMsg", { limit: FREE_TRADE_LIMIT }),
             [
-              { text: "Позже", style: "cancel" },
+              { text: t("common.later"), style: "cancel" },
               {
-                text: "Перейти на Premium",
+                text: t("common.upgrade"),
                 onPress: () => router.push("/paywall"),
               },
             ],
           );
           return;
         }
-        Alert.alert("Ошибка", error.message);
+        Alert.alert(t("common.error"), error.message);
         return;
       }
 
@@ -99,7 +96,9 @@ export default function NewTradeScreen() {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
-      <Stack.Screen options={{ title: "Новая сделка", headerShown: true }} />
+      <Stack.Screen
+        options={{ title: t("trade.newTitle"), headerShown: true }}
+      />
       <View style={{ gap: 12 }}>
         <TradeForm
           initial={{
@@ -117,7 +116,7 @@ export default function NewTradeScreen() {
             closedAt: "",
             notes: "",
           }}
-          submitLabel="Сохранить"
+          submitLabel={t("trade.save")}
           submitting={saving}
           onSubmit={handleSubmit}
         />

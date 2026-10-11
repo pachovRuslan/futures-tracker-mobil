@@ -1,4 +1,5 @@
 import type { PnlFields } from "./types";
+import { getLocale, type Locale } from "@/i18n";
 
 /**
  * Чистые функции для расчётов по сделкам.
@@ -14,11 +15,18 @@ export function tradeNetPnl(t: PnlFields): number {
 // Форматирование
 // ─────────────────────────────────────────────────────────────────────────────
 
-const RU_LOCALE = "ru-RU";
+const INTL_LOCALES: Record<Locale, string> = {
+  ru: "ru-RU",
+  en: "en-US",
+};
+
+function intlLocale(): string {
+  return INTL_LOCALES[getLocale()] ?? "ru-RU";
+}
 
 /** Форматирование числа с разделителями тысяч и 2 знаками после запятой. */
 export function fmt(n: number): string {
-  return n.toLocaleString(RU_LOCALE, {
+  return n.toLocaleString(intlLocale(), {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   });
@@ -29,12 +37,13 @@ export function fmtPnl(n: number): string {
   return (n >= 0 ? "+" : "") + fmt(n);
 }
 
-/** Форматирование даты ISO в "DD.MM.YY". Безопасно для null. */
+/** Форматирование даты ISO в "DD.MM.YY" (ru) / "MM/DD/YY" (en).
+ *  Безопасно для null. */
 export function fmtDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(RU_LOCALE, {
+  return d.toLocaleDateString(intlLocale(), {
     day: "2-digit",
     month: "2-digit",
     year: "2-digit",

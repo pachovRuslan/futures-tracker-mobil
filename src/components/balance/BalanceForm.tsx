@@ -1,4 +1,5 @@
 import { useAuth } from "@/context/AuthContext";
+import { useI18n } from "@/i18n/I18nContext";
 import { getSupabase } from "@/services/auth";
 import type { BalanceType } from "@/shared/types";
 import type { ThemeColors } from "@/theme/colors";
@@ -41,6 +42,7 @@ export function BalanceForm({ onSaved }: BalanceFormProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const { user } = useAuth();
+  const { t } = useI18n();
   const [formOpen, setFormOpen] = useState(false);
   const [type, setType] = useState<BalanceType>("spot");
   const [value, setValue] = useState("");
@@ -53,11 +55,11 @@ export function BalanceForm({ onSaved }: BalanceFormProps) {
 
     const val = Number(value.trim().replace(",", "."));
     if (!value.trim() || !Number.isFinite(val)) {
-      Alert.alert("Проверьте поля", "Сумма должна быть числом.");
+      Alert.alert(t("trade.checkFields"), t("balance.vAmount"));
       return;
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
-      Alert.alert("Проверьте поля", "Дата должна быть в формате ГГГГ-ММ-ДД.");
+      Alert.alert(t("trade.checkFields"), t("balance.vDate"));
       return;
     }
 
@@ -82,7 +84,7 @@ export function BalanceForm({ onSaved }: BalanceFormProps) {
       setFormOpen(false);
       await onSaved();
     } catch (e) {
-      Alert.alert("Ошибка", e instanceof Error ? e.message : String(e));
+      Alert.alert(t("common.error"), e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
@@ -95,26 +97,26 @@ export function BalanceForm({ onSaved }: BalanceFormProps) {
         onPress={() => setFormOpen((v) => !v)}
       >
         <Text style={styles.addButtonText}>
-          {formOpen ? "Свернуть форму" : "+ Записать баланс"}
+          {formOpen ? t("balance.collapse") : t("balance.add")}
         </Text>
       </TouchableOpacity>
 
       {formOpen && (
         <View style={styles.form}>
           <View style={styles.sideRow}>
-            {(["spot", "futures"] as const).map((t) => (
+            {(["spot", "futures"] as const).map((ty) => (
               <TouchableOpacity
-                key={t}
-                style={[styles.typeButton, type === t && styles.typeButtonActive]}
-                onPress={() => setType(t)}
+                key={ty}
+                style={[styles.typeButton, type === ty && styles.typeButtonActive]}
+                onPress={() => setType(ty)}
               >
                 <Text
                   style={[
                     styles.typeButtonText,
-                    type === t && styles.typeButtonTextActive,
+                    type === ty && styles.typeButtonTextActive,
                   ]}
                 >
-                  {t === "spot" ? "Спот" : "Фьючерс"}
+                  {ty === "spot" ? t("balance.spot") : t("balance.futures")}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -122,7 +124,7 @@ export function BalanceForm({ onSaved }: BalanceFormProps) {
 
           <View style={styles.fieldRow}>
             <View style={[styles.field, { flex: 1 }]}>
-              <Text style={styles.fieldLabel}>Сумма, USD</Text>
+              <Text style={styles.fieldLabel}>{t("balance.amount")}</Text>
               <TextInput
                 style={styles.input}
                 placeholder="1000"
@@ -133,10 +135,10 @@ export function BalanceForm({ onSaved }: BalanceFormProps) {
               />
             </View>
             <View style={[styles.field, { flex: 1 }]}>
-              <Text style={styles.fieldLabel}>Дата</Text>
+              <Text style={styles.fieldLabel}>{t("balance.date")}</Text>
               <TextInput
                 style={styles.input}
-                placeholder="ГГГГ-ММ-ДД"
+                placeholder={t("balance.datePlaceholder")}
                 placeholderTextColor={colors.textFaint}
                 value={date}
                 onChangeText={setDate}
@@ -147,10 +149,10 @@ export function BalanceForm({ onSaved }: BalanceFormProps) {
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Заметка</Text>
+            <Text style={styles.fieldLabel}>{t("balance.note")}</Text>
             <TextInput
               style={styles.input}
-              placeholder="Опционально"
+              placeholder={t("form.notesPlaceholder")}
               placeholderTextColor={colors.textFaint}
               value={note}
               onChangeText={setNote}
@@ -165,7 +167,7 @@ export function BalanceForm({ onSaved }: BalanceFormProps) {
             {saving ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Сохранить</Text>
+              <Text style={styles.buttonText}>{t("trade.save")}</Text>
             )}
           </TouchableOpacity>
         </View>

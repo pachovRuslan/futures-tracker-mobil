@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useI18n } from "@/i18n/I18nContext";
 import { exchangeLabel } from "@/shared/format";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
@@ -25,9 +26,10 @@ export function ExchangeFilterChips({
 }: ExchangeFilterChipsProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   return (
     <View style={styles.chipsBlock}>
-      <Text style={styles.chipsLabel}>БИРЖИ В PNL</Text>
+      <Text style={styles.chipsLabel}>{t("dash.chipsLabel")}</Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -49,7 +51,7 @@ export function ExchangeFilterChips({
               exchangeFilter === "all" && styles.chipTextActive,
             ]}
           >
-            Все
+            {t("dash.chipsAll")}
           </Text>
         </Pressable>
         {exchanges.map((ex) => (

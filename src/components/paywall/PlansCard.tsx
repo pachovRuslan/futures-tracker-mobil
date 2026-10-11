@@ -1,19 +1,22 @@
+import { useI18n } from "@/i18n/I18nContext";
+import type { TFunction } from "@/i18n";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { PACKAGE_TYPE, type PurchasesPackage } from "react-native-purchases";
 
-/** Человекочитаемое название пакета подписки. */
-function packageLabel(pkg: PurchasesPackage): string {
+/** Человекочитаемое название пакета подписки (перевод передаёт
+ *  вызывающий компонент). */
+function packageLabel(pkg: PurchasesPackage, t: TFunction): string {
   switch (pkg.packageType) {
     case PACKAGE_TYPE.MONTHLY:
-      return "1 месяц";
+      return t("plan.month");
     case PACKAGE_TYPE.ANNUAL:
-      return "1 год";
+      return t("plan.year");
     case PACKAGE_TYPE.WEEKLY:
-      return "1 неделя";
+      return t("plan.week");
     case PACKAGE_TYPE.LIFETIME:
-      return "Навсегда";
+      return t("plan.forever");
     default:
       return pkg.product.title ?? "Premium";
   }
@@ -36,6 +39,7 @@ interface PlansCardProps {
 export function PlansCard({ packages, selected, onSelect }: PlansCardProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   return (
     <View style={styles.plansCard}>
       {packages.map((pkg) => {
@@ -50,9 +54,9 @@ export function PlansCard({ packages, selected, onSelect }: PlansCardProps) {
               {active ? <View style={styles.planRadioDot} /> : null}
             </View>
             <View style={styles.planContent}>
-              <Text style={styles.planTitle}>{packageLabel(pkg)}</Text>
+              <Text style={styles.planTitle}>{packageLabel(pkg, t)}</Text>
               <Text style={styles.planDesc}>
-                Автопродление · отмена в любой момент
+                {t("paywall.autoRenew")}
               </Text>
             </View>
             <Text style={styles.planPrice}>

@@ -1,4 +1,5 @@
 import { premiumAlert } from "@/components/connections/premiumAlert";
+import { useI18n } from "@/i18n/I18nContext";
 import { api, isPremiumRequired } from "@/services/api";
 import type { ApiExchange } from "@/shared/types";
 import {
@@ -35,6 +36,7 @@ interface AddConnectionFormProps {
 export function AddConnectionForm({ onSaved }: AddConnectionFormProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   const router = useRouter();
   const [exchange, setExchange] = useState<ApiExchange>(EXCHANGES[0]);
   const [apiKey, setApiKey] = useState("");
@@ -66,7 +68,7 @@ export function AddConnectionForm({ onSaved }: AddConnectionFormProps) {
         premiumAlert(router);
         return;
       }
-      Alert.alert("Ошибка", e instanceof Error ? e.message : String(e));
+      Alert.alert(t("common.error"), e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
@@ -75,7 +77,7 @@ export function AddConnectionForm({ onSaved }: AddConnectionFormProps) {
   return (
     <View style={styles.form}>
       <View>
-        <Text style={styles.fieldLabel}>Биржа</Text>
+        <Text style={styles.fieldLabel}>{t("conn.exchange")}</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -115,7 +117,7 @@ export function AddConnectionForm({ onSaved }: AddConnectionFormProps) {
         <Text style={styles.fieldLabel}>API Key</Text>
         <TextInput
           style={styles.input}
-          placeholder="Введите API Key"
+          placeholder={t("conn.apiKeyPlaceholder")}
           placeholderTextColor={colors.textFaint}
           value={apiKey}
           onChangeText={setApiKey}
@@ -128,7 +130,7 @@ export function AddConnectionForm({ onSaved }: AddConnectionFormProps) {
         <Text style={styles.fieldLabel}>API Secret</Text>
         <TextInput
           style={styles.input}
-          placeholder="Введите API Secret"
+          placeholder={t("conn.apiSecretPlaceholder")}
           placeholderTextColor={colors.textFaint}
           value={apiSecret}
           onChangeText={setApiSecret}
@@ -143,7 +145,7 @@ export function AddConnectionForm({ onSaved }: AddConnectionFormProps) {
           <Text style={styles.fieldLabel}>Passphrase</Text>
           <TextInput
             style={styles.input}
-            placeholder="Третий ключ из API-настроек Bitget"
+            placeholder={t("conn.passphrasePlaceholder")}
             placeholderTextColor={colors.textFaint}
             value={passphrase}
             onChangeText={setPassphrase}
@@ -152,8 +154,7 @@ export function AddConnectionForm({ onSaved }: AddConnectionFormProps) {
             autoCorrect={false}
           />
           <Text style={styles.fieldHint}>
-            {EXCHANGE_LABELS[exchange]} выдаёт три ключа при создании
-            API-ключа: Key, Secret и Passphrase.
+            {t("conn.passphraseHint", { exchange: EXCHANGE_LABELS[exchange] })}
           </Text>
         </View>
       )}
@@ -173,7 +174,7 @@ export function AddConnectionForm({ onSaved }: AddConnectionFormProps) {
         }
       >
         <Text style={styles.buttonText}>
-          {saving ? "Проверка..." : "Сохранить"}
+          {saving ? t("conn.checking") : t("trade.save")}
         </Text>
       </TouchableOpacity>
     </View>

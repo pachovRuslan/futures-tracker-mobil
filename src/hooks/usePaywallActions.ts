@@ -3,6 +3,7 @@ import {
   restorePremium,
   syncEntitlementToServer,
 } from "@/services/purchases";
+import { useI18n } from "@/i18n/I18nContext";
 import { useCallback, useState } from "react";
 import type { PurchasesPackage } from "react-native-purchases";
 
@@ -20,6 +21,7 @@ export function usePaywallActions(
   /** refresh из useSubscription — force=true обходит кэш после покупки. */
   refresh: (force?: boolean) => Promise<void>,
 ) {
+  const { t } = useI18n();
   const [busy, setBusy] = useState<PaywallBusy>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,14 +67,14 @@ export function usePaywallActions(
       await restorePremium();
       await finalize();
       // Если после restore премиума нет — честно скажем, а не промолчим.
-      setError("Покупки восстановлены. Если Premium не активировался — проверьте аккаунт стора.");
+      setError(t("paywall.restoredMsg"));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
     } finally {
       setBusy(null);
     }
-  }, [busy, finalize]);
+  }, [busy, finalize, t]);
 
   return { busy, error, handleBuy, handleRestore };
 }

@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useI18n } from "@/i18n/I18nContext";
 import { EXCHANGE_CONNECTIONS_ENABLED } from "@/shared/config";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
@@ -28,6 +29,7 @@ export function ActionButtons({
 }: ActionButtonsProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   return (
     <View style={styles.actionsRow}>
       <Pressable
@@ -35,7 +37,7 @@ export function ActionButtons({
         onPress={onAddTrade}
       >
         <Ionicons name="add" size={18} color="#fff" />
-        <Text style={styles.actionButtonTextDark}>Сделка</Text>
+        <Text style={styles.actionButtonTextDark}>{t("dash.actionTrade")}</Text>
       </Pressable>
       {EXCHANGE_CONNECTIONS_ENABLED && (
         <Pressable
@@ -47,7 +49,7 @@ export function ActionButtons({
             size={18}
             color={colors.text}
           />
-          <Text style={styles.actionButtonText}>Биржа</Text>
+          <Text style={styles.actionButtonText}>{t("dash.actionExchange")}</Text>
         </Pressable>
       )}
     </View>

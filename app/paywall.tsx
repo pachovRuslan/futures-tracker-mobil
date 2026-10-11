@@ -4,6 +4,7 @@ import { LegalNote } from "@/components/paywall/LegalNote";
 import { PlansCard } from "@/components/paywall/PlansCard";
 import { RestoreButton } from "@/components/paywall/RestoreButton";
 import { useAuth } from "@/context/AuthContext";
+import { useI18n } from "@/i18n/I18nContext";
 import { usePaywallActions } from "@/hooks/usePaywallActions";
 import { useSubscription } from "@/hooks/useSubscription";
 import {
@@ -28,6 +29,7 @@ import type { PurchasesPackage } from "react-native-purchases";
 export default function PaywallScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const { t } = useI18n();
   const router = useRouter();
   const { user } = useAuth();
   const { isPremium, refresh } = useSubscription();
@@ -80,7 +82,7 @@ export default function PaywallScreen() {
   if (isPremium) {
     return (
       <View style={styles.center}>
-        <Text style={styles.muted}>Premium активен. Перенаправляем…</Text>
+        <Text style={styles.muted}>{t("paywall.premiumActive")}</Text>
       </View>
     );
   }
@@ -97,9 +99,7 @@ export default function PaywallScreen() {
         <View style={styles.header}>
           <Text style={styles.eyebrow}>FUTURES TRACKER</Text>
           <Text style={styles.title}>Premium</Text>
-          <Text style={styles.subtitle}>
-            Раскрой полный потенциал трекера сделок
-          </Text>
+          <Text style={styles.subtitle}>{t("paywall.subtitle")}</Text>
         </View>
 
         <FeaturesCard />
@@ -113,13 +113,16 @@ export default function PaywallScreen() {
         {/* ─── Биллинг не сконфигурирован (нет RC-ключей в сборке) ─────── */}
         {!billingReady ? (
           <View style={styles.noticeCard}>
-            <Text style={styles.noticeTitle}>Покупка недоступна</Text>
+            <Text style={styles.noticeTitle}>
+              {t("paywall.buyUnavailableTitle")}
+            </Text>
             <Text style={styles.noticeText}>
-              В этой сборке не заданы ключи магазина (EXPO_PUBLIC_REVENUECAT_*).
-              Premium можно активировать в сборке с настроенным биллингом.
+              {t("paywall.buyUnavailableText")}
             </Text>
             {user?.email ? (
-              <Text style={styles.noticeAccount}>Аккаунт: {user.email}</Text>
+              <Text style={styles.noticeAccount}>
+                {t("paywall.account", { email: user.email })}
+              </Text>
             ) : null}
           </View>
         ) : null}
@@ -128,17 +131,18 @@ export default function PaywallScreen() {
         {loadingPlans ? (
           <View style={styles.noticeCard}>
             <ActivityIndicator color={colors.accent} />
-            <Text style={styles.noticeText}>Загружаем тарифы…</Text>
+            <Text style={styles.noticeText}>{t("paywall.plansLoading")}</Text>
           </View>
         ) : null}
 
         {/* ─── Офферинги пришли пустыми (продукты не настроены в RC) ──── */}
         {billingReady && packages !== null && packages.length === 0 ? (
           <View style={styles.noticeCard}>
-            <Text style={styles.noticeTitle}>Тарифы настраиваются</Text>
+            <Text style={styles.noticeTitle}>
+              {t("paywall.plansPendingTitle")}
+            </Text>
             <Text style={styles.noticeText}>
-              Подписка скоро появится в магазине. Уже покупали? Восстановите
-              покупку кнопкой ниже.
+              {t("paywall.plansPendingText")}
             </Text>
           </View>
         ) : null}
@@ -163,7 +167,7 @@ export default function PaywallScreen() {
         <LegalNote />
 
         <Pressable style={styles.closeButton} onPress={handleClose}>
-          <Text style={styles.closeButtonText}>Закрыть</Text>
+          <Text style={styles.closeButtonText}>{t("common.close")}</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>

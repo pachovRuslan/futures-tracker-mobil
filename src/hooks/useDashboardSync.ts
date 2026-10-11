@@ -1,4 +1,5 @@
 import { api, isPremiumRequired } from "@/services/api";
+import { useI18n } from "@/i18n/I18nContext";
 import { EXCHANGE_CONNECTIONS_ENABLED } from "@/shared/config";
 import { EXCHANGES, EXCHANGE_LABELS } from "@/shared/types";
 import type { ApiExchange } from "@/shared/types";
@@ -32,6 +33,7 @@ export function useDashboardSync({
   mountedRef,
 }: UseDashboardSyncArgs) {
   const router = useRouter();
+  const { t } = useI18n();
   /** Идёт ручной синк с биржами (кнопка «Синхрон.»). */
   const [syncBusy, setSyncBusy] = useState(false);
   /** Строка статуса синка (прогресс/итог) под hero-карточкой. */
@@ -63,7 +65,7 @@ export function useDashboardSync({
 
     // Kill-switch фичи подключений выключен — синкить нечем.
     if (!EXCHANGE_CONNECTIONS_ENABLED) {
-      setSyncMsg("Синк с биржами временно отключён.");
+      setSyncMsg(t("sync.disabled"));
       return;
     }
 
@@ -71,7 +73,7 @@ export function useDashboardSync({
     const setMsg = (msg: string | null) => {
       if (mountedRef.current) setSyncMsg(msg);
     };
-    setMsg("Загружаю список подключений…");
+    setMsg(t("sync.loadingConnections"));
 
     try {
       const { connections } = await api.getConnections();
@@ -80,9 +82,7 @@ export function useDashboardSync({
         .filter((ex) => EXCHANGES.includes(ex));
 
       if (connected.length === 0) {
-        setMsg(
-          "Нет подключённых бирж — добавьте API-ключи через кнопку «Биржа».",
-        );
+        setMsg(t("sync.noConnectionsDash"));
         return;
       }
 
@@ -90,14 +90,20 @@ export function useDashboardSync({
       const errors: string[] = [];
       for (let i = 0; i < connected.length; i++) {
         const ex = connected[i] as ApiExchange;
-        setMsg(`Синк: ${EXCHANGE_LABELS[ex]} (${i + 1}/${connected.length})…`);
+        setMsg(
+          t("sync.progress", {
+            exchange: EXCHANGE_LABELS[ex],
+            i: i + 1,
+            n: connected.length,
+          }),
+        );
         try {
           const data = await api.syncExchange(ex);
           if (data.ok) {
             upserted += data.upserted ?? 0;
           } else {
             errors.push(
-              `${EXCHANGE_LABELS[ex]}: ${data.error ?? data.message ?? "сбой"}`,
+              `${EXCHANGE_LABELS[ex]}: ${data.error ?? data.message ?? t("sync.failShort")}`,
             );
           }
         } catch (e) {
@@ -115,8 +121,11 @@ export function useDashboardSync({
 
       setMsg(
         errors.length === 0
-          ? `Готово — обновлено ${upserted} записей`
-          : `Обновлено ${upserted} записей. Ошибки: ${errors.join("; ")}`,
+          ? t("sync.done", { count: upserted })
+          : t("sync.doneWithErrors", {
+              count: upserted,
+              errors: errors.join("; "),
+            }),
       );
 
       // Свежие сделки — на дашборд сразу, без ручного pull-to-refresh.
@@ -131,7 +140,7 @@ export function useDashboardSync({
     } finally {
       if (mountedRef.current) setSyncBusy(false);
     }
-  }, [syncBusy, subLoading, isPremium, router, loadDashboard, mountedRef]);
+  }, [syncBusy, subLoading, isPremium, router, loadDashboard, mountedRef, t]);
 
   return { syncBusy, syncMsg, handleSync };
 }
