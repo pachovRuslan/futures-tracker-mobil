@@ -32,9 +32,7 @@ interface PnlChartProps {
 }
 
 /**
- * PnlChart — бар-чарт «PNL ПО МЕСЯЦАМ». Выделен из бог-файла
- * app/(tabs)/index.tsx при декомпозиции; разметка, логика подсветки
- * и стили перенесены без изменений.
+ * PnlChart — бар-чарт «PNL ПО МЕСЯЦАМ».
  */
 export function PnlChart({
   monthly,

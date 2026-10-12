@@ -32,9 +32,7 @@ interface PlansCardProps {
 }
 
 /**
- * PlansCard — тарифы из стора: радио-строки «срок · цена». Выделено из
- * app/paywall.tsx при декомпозиции; packageLabel, разметка и стили
- * перенесены без изменений.
+ * PlansCard — тарифы из стора: радио-строки «срок · цена».
  */
 export function PlansCard({ packages, selected, onSelect }: PlansCardProps) {
   const { colors } = useTheme();

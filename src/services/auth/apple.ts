@@ -7,9 +7,6 @@ import { Platform } from "react-native";
  * apple — Sign in with Apple: raw nonce → SHA256, credential →
  * supabase.auth.signInWithIdToken. getAppleAuthentication возвращает
  * модуль только на iOS (иначе null).
- *
- * Выделено из src/services/auth.ts при декомпозиции бог-сервиса;
- * логика перенесена без изменений.
  */
 
 export function getAppleAuthentication():

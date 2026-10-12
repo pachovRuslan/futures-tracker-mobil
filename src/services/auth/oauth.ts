@@ -12,13 +12,10 @@ import { Linking, Platform } from "react-native";
  * (web/Expo Go/сборка), парсинг колбэка, обмен кода на сессию
  * (exchangeCodeOnce) и человекочитаемые описания ошибок Supabase.
  *
- * Побочный эффект на импорте (как и раньше в бог-файле): на native
- * вешается Linking-listener на url с /auth/callback — url копится в
- * pendingCallbackUrl и забирается экраном колбэка. exchangedCodes
- * (защита от повторного обмена кода) осталась приватной для модуля.
- *
- * Выделено из src/services/auth.ts при декомпозиции; логика
- * перенесена без изменений.
+ * Побочный эффект на импорте: на native вешается Linking-listener на
+ * url с /auth/callback — url копится в pendingCallbackUrl и забирается
+ * экраном колбэка. exchangedCodes (защита от повторного обмена кода)
+ * остался приватным для модуля.
  */
 
 export function parseOAuthParams(url: string): Record<string, string> {

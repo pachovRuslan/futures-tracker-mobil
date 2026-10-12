@@ -31,8 +31,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
  * в useDashboardStats, ручной синк с биржами — в useDashboardSync, шапка —
  * DashboardHeader, hero-карточка — HeroCard, апгрейд-баннер — PremiumBanner,
  * сетка статистики — StatsGrid, фильтр бирж — ExchangeFilterChips, график —
- * PnlChart, список сделок — RecentTrades, кнопки действий — ActionButtons
- * (бог-файл 1385 строк разбирался в два шага; поведение не менялось).
+ * PnlChart, список сделок — RecentTrades, кнопки действий — ActionButtons.
  * Здесь осталось: ранние состояния, pull-to-refresh и раскладка.
  */
 export default function DashboardScreen() {

@@ -30,8 +30,6 @@ interface AddConnectionFormProps {
 /**
  * AddConnectionForm — форма добавления ключей биржи: выбор биржи, API Key,
  * API Secret, Passphrase (для схем с третьим ключом, сейчас Bitget).
- * Выделено из app/connections.tsx при декомпозиции; состояние формы,
- * submit и стили перенесены без изменений.
  */
 export function AddConnectionForm({ onSaved }: AddConnectionFormProps) {
   const { colors } = useTheme();
@@ -63,7 +61,7 @@ export function AddConnectionForm({ onSaved }: AddConnectionFormProps) {
       setPassphrase("");
       await onSaved();
     } catch (e) {
-      // Серверный премиум-гейт (волна 1): 402 вместо тихого обхода.
+      // Серверный премиум-гейт: 402 PREMIUM_REQUIRED вместо тихого обхода.
       if (isPremiumRequired(e)) {
         premiumAlert(router);
         return;

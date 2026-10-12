@@ -20,8 +20,6 @@ interface StatsGridProps {
 
 /**
  * StatsGrid — сетка статистики 3×3 (месяц + всё время, как на вебе).
- * Выделена из app/(tabs)/index.tsx при декомпозиции; разметка и
- * стили перенесены без изменений.
  */
 export function StatsGrid({
   month,

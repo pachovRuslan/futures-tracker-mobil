@@ -29,18 +29,9 @@ const TRADES_SELECT = [
 /**
  * useTrades — загрузка списка сделок напрямую из Supabase (через RLS).
  *
- * ⚠️ История бага: раньше хук ходил на REST-бэкенд
- * (EXPO_PUBLIC_API_URL/api/trades), которого НЕ СУЩЕСТВУЕТ — бэкенд
- * отвечал 307 → /login HTML-страницей, и вкладка «Сделки» вечно падала с
- * "Unexpected token <". Дашборд при этом читал Supabase напрямую — отсюда
- * и расхождение «дашборд работает, список сделок — нет». Теперь весь
- * read-path идёт напрямую в Supabase единообразно.
- *
  * Защита от race conditions: обновляет state только последний по счёту
- * запрос (requestIdRef). AbortController не используется — клиент
- * supabase-js не принимает fetch-signal, комментарий в старой версии
- * «AbortController отменяет fetch при unmount» не соответствовал
- * действительности.
+ * запрос (requestIdRef). Таймауты fetch настраиваются в getSupabase()
+ * (см. src/services/auth/client.ts → fetchWithTimeout).
  */
 export function useTrades(): UseTradesResult {
   const [trades, setTrades] = useState<TradeRow[]>([]);

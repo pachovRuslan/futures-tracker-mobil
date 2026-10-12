@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "@/i18n/I18nContext";
-import { exchangeLabel } from "@/shared/format";
+import { exchangeLabel } from "@/shared/types";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -15,9 +15,7 @@ interface ExchangeFilterChipsProps {
 }
 
 /**
- * ExchangeFilterChips — чипы фильтра по биржам «БИРЖИ В PNL» (как на
- * вебе). Выделены из app/(tabs)/index.tsx при декомпозиции; разметка
- * и стили перенесены без изменений.
+ * ExchangeFilterChips — чипы фильтра по биржам «БИРЖИ В PNL» (как на вебе).
  */
 export function ExchangeFilterChips({
   exchanges,

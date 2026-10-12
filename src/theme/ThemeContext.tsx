@@ -21,7 +21,7 @@ import {
  *
  * Паттерн повторяет AuthContext: выбранный режим переживает перезапуск
  * (web → localStorage, native → SecureStore — тот же сплит, что у
- * сессии Supabase в src/services/auth.ts; AsyncStorage в проект не
+ * сессии Supabase в src/services/auth/storage.ts; AsyncStorage в проект не
  * тянем ради одной строки). «Системная» следит за ОС вживую через
  * useColorScheme().
  *

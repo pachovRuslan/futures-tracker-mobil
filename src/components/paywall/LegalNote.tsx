@@ -7,8 +7,6 @@ import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 /**
  * LegalNote — юридическая сноска (требование сторов): условия подписки и
  * ссылки на политику конфиденциальности / условия использования.
- * Выделено из app/paywall.tsx при декомпозиции; разметка и стили
- * перенесены без изменений.
  */
 export function LegalNote() {
   const { colors } = useTheme();

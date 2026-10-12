@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "@/i18n/I18nContext";
-import { exchangeLabel } from "@/shared/format";
 import { fmtPnl } from "@/shared/trade-model";
+import { exchangeLabel } from "@/shared/types";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
 import { useMemo } from "react";
@@ -35,9 +35,6 @@ interface HeroCardProps {
  * «Синхрон.», net P&L и подпись с фильтром биржи. Кнопка запускает
  * НАСТОЯЩИЙ синк с биржами через серверный мост (как «Синк всё» на
  * сайте): прогресс — в строке статуса под карточкой, до ~60 с на биржу.
- *
- * Выделено из app/(tabs)/index.tsx при декомпозиции; разметка, логика
- * цвета P&L и стили перенесены без изменений.
  */
 export function HeroCard({
   net,

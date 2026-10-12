@@ -12,9 +12,6 @@ interface BalanceRowProps {
 /**
  * BalanceRow — карточка снапшота баланса: сумма, дата, опциональная
  * заметка. Долгое нажатие (400 мс) — удаление.
- *
- * Выделено из app/(tabs)/balance.tsx при декомпозиции; разметка,
- * задержка long-press и стили перенесены без изменений.
  */
 export function BalanceRow({ snapshot: s, onDelete }: BalanceRowProps) {
   const { colors } = useTheme();

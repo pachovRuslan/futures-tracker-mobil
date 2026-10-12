@@ -91,9 +91,9 @@ export function validateTradeFormValues(
 
 /**
  * Даты формы → колонки БД.
- *   - opened_at: пустое поле → текущий момент (как до волны 2);
+ *   - opened_at: пустое поле → текущий момент;
  *   - closed_at: пустое → null для открытой позиции (нет Close-цены),
- *     либо текущий момент, если Close-цена указана (как до волны 2).
+ *     либо текущий момент, если Close-цена указана.
  */
 export function tradeDatesFromForm(
   v: TradeFormValues,
@@ -308,8 +308,8 @@ export function TradeForm({
         </View>
       </View>
 
-      {/* Даты (волна 2): раньше всегда писалось «сейчас» — задним
-          числом сделку завести было нельзя. */}
+      {/* Даты: пользователь сам вводит дату/время открытия и закрытия
+          сделки — задним числом тоже можно. */}
       <DateTimeField
         label={t("form.opened")}
         value={openedAt}

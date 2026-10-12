@@ -18,20 +18,20 @@ import {
 } from "react-native";
 
 /**
- * Редактирование сделки (волна 2: раньше список сделок был read-only).
+ * Редактирование сделки.
  *
- * Семантика — как на сайте (app/api/trades/[id]/route.ts):
+ * Семантика — как на сайте:
  *   - manual-сделки: редактируются все поля (синканные всё равно
  *     перезапишет следующий синк);
  *   - прочие биржи: редактируются только заметки;
  *   - удаление — только manual.
  *
  * Запись идёт напрямую в Supabase — RLS-политики update/delete own
- * trades (миграция 02) пропускают только строки владельца.
+ * trades пропускают только строки владельца.
  *
- * После декомпозиции: загрузка — useEditableTrade, мутации —
- * useTradeMutations, сводка — TradeSummaryCard, редактор заметки —
- * TradeNotesForm. Здесь осталось: ранние состояния и раскладка.
+ * Загрузка — useEditableTrade, мутации — useTradeMutations, сводка —
+ * TradeSummaryCard, редактор заметки — TradeNotesForm. Здесь осталось:
+ * ранние состояния и раскладка.
  */
 export default function EditTradeScreen() {
   const { colors } = useTheme();

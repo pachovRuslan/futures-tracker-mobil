@@ -17,11 +17,10 @@ import { Alert, ScrollView, StyleSheet, View } from "react-native";
  * Вставка идёт напрямую в Supabase — RLS-политика users_insert_own_trades
  * гарантирует, что юзер может писать только свои строки (user_id =
  * auth.uid()); серверный лимит FREE дублирует BEFORE INSERT-триггер
- * (миграция 10).
+ * enforce_free_trade_limit (docs/supabase.sql §6).
  *
- * Волна 2: форма вынесена в TradeForm, появились даты открытия/закрытия —
- * раньше обе всегда писались «сейчас», задним числом сделку завести
- * было нельзя.
+ * Форма вынесена в TradeForm (общая с экраном редактирования). Даты
+ * открытия/закрытия — отдельные поля с кнопкой «сейчас».
  */
 export default function NewTradeScreen() {
   const { colors } = useTheme();
@@ -64,7 +63,7 @@ export default function NewTradeScreen() {
     try {
       const { error } = await getSupabase().from("trades").insert(payload);
       if (error) {
-        // Серверный лимит FREE (триггер enforce_free_trade_limit, миграция 10):
+        // Серверный лимит FREE (триггер enforce_free_trade_limit, docs/supabase.sql §6):
         // клиентская проверка — лишь UX, бэкенд — источник правды.
         if (error.message.includes("FREE_TRADE_LIMIT_REACHED")) {
           Alert.alert(

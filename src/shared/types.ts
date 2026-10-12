@@ -45,6 +45,15 @@ export const EXCHANGE_LABELS: Record<Exchange, string> = {
   manual: "Manual",
 };
 
+/**
+ * Безопасная метка биржи для строковых ключей (фильтр-чипы, подписи):
+ * если код не из Exchange (например, фильтр "all" или неизвестная биржа),
+ * возвращается сам код как есть.
+ */
+export function exchangeLabel(ex: string): string {
+  return (EXCHANGE_LABELS as Record<string, string>)[ex] ?? ex;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Trade
 // ─────────────────────────────────────────────────────────────────────────────

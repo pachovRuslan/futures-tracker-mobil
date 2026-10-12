@@ -22,8 +22,7 @@ interface SyncAllBoxProps {
 /**
  * SyncAllBox — ручной синк: кнопка «Синк все биржи» + статусная строка.
  * Свежие сделки появятся на дашборде при возврате (он перезагружается
- * по фокусу). Выделено из app/connections.tsx при декомпозиции; разметка
- * и стили перенесены без изменений.
+ * по фокусу).
  */
 export function SyncAllBox({ syncing, syncMsg, onSyncAll }: SyncAllBoxProps) {
   const { colors } = useTheme();

@@ -45,7 +45,7 @@ export default function SettingsScreen() {
 
   // ─── Удаление аккаунта (Google Play Account Deletion / App Review 5.1.1(v)) ──
   //
-  // RPC delete_my_account() (миграция 10 на сайте) сносит auth.users;
+  // RPC delete_my_account() (docs/supabase.sql §7) сносит auth.users;
   // trades / balance_snapshots / user_entitlements / exchange_connections
   // удаляются каскадом. Перед удалением выходим из RevenueCat и из сессии.
   const confirmDeleteAccount = async () => {

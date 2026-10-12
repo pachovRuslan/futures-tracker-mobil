@@ -32,7 +32,7 @@ import {
  * exchangeCodeForSession напрямую), потому что в Expo Go этот redirect
  * параллельно обрабатывает и signInWithGoogle (обещание
  * openAuthSessionAsync). PKCE-код одноразовый — без дедупликации
- * второй обмен падает с 400 и ломает вход (см. REFACTORING.md, баг №3).
+ * второй обмен падает с 400 и ломает вход.
  */
 export default function AuthCallback() {
   const { colors } = useTheme();
@@ -110,7 +110,7 @@ export default function AuthCallback() {
           if (processUrl(url)) return;
           // 3. Warm start: событие "url" пришло ДО монтирования экрана
           //    (пользователь был на /login) — его перехватил глобальный
-          //    слушатель в services/auth.ts. Забираем сохранённый URL.
+          //    слушатель в src/services/auth/oauth.ts. Забираем сохранённый URL.
           processUrl(consumePendingCallbackUrl());
         });
       });
@@ -133,15 +133,11 @@ export default function AuthCallback() {
 
     // 6. Timeout fallback: только если обмен кода ещё НЕ начался.
     //
-    // История бага: раньше здесь стоял безусловный redirect через 5 секунд.
     // На медленной сети/устройстве обмен кода занимает больше 5с
     // (RTT до региона Supabase + серверный обмен с Google + шифрование
     // SecureStore, где сессия ~4-6КБ пишется ~10 отдельными операциями
-    // Keystore). Экран уходил на /login, обмен завершался уже без него,
-    // сессия записывалась в хранилище, но UI узнавал о ней только после
-    // перезапуска приложения — «бесконечный логин». Если обмен начат —
-    // ждём (Android всё равно замораживает фоновый fetch, он доделается
-    // при возврате в приложение).
+    // Keystore). Если обмен начат — ждём (Android замораживает фоновый
+    // fetch, он доделается при возврате в приложение).
     const timer = setTimeout(async () => {
       if (isHandled.current) return;
       if (codeStarted.current) {

@@ -13,10 +13,8 @@ import { Platform } from "react-native";
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Персистентность сессии Supabase. Выделено из src/services/auth.ts при
- * декомпозиции бог-сервиса; логика перенесена без изменений (safeStorage
- * стал экспортом этого модуля для client.ts — наружу, через
- * auth/index.ts, не переэкспортируется).
+ * Персистентность сессии Supabase. safeStorage — экспорт этого модуля
+ * для client.ts; наружу, через auth/index.ts, не переэкспортируется.
  */
 
 const CHUNK_SIZE = 2000;
@@ -30,10 +28,9 @@ async function secureGet(key: string): Promise<string | null> {
   const n = Number.parseInt(meta, 10);
   if (!Number.isFinite(n) || n <= 0) return null;
 
-  // ⚠️ История оптимизации: чанки читались ПОСЛЕДОВАТЕЛЬНО — 3 чанка
-  // сессии = 3 подряд операции Android Keystore (аппаратное шифрование,
-  // ~200-600мс каждая) — заметная часть «Вход в систему…» при каждом
-  // запуске. Операции независимы — читаем параллельно.
+  // Чанки читаем параллельно — операции Android Keystore (аппаратное
+  // шифрование, ~200-600мс каждая) независимы, последовательное чтение
+  // удлиняло бы «Вход в систему…» на каждое лишнее чтение.
   const parts = await Promise.all(
     Array.from({ length: n }, (_, i) =>
       SecureStore.getItemAsync(chunkKey(key, i)),

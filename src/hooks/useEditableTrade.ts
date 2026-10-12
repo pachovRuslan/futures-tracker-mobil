@@ -22,9 +22,6 @@ const EDIT_SELECT = [
  * useEditableTrade — загрузка сделки для экрана редактирования по id
  * из параметров маршрута (Supabase, RLS: строки только владельца),
  * плюс заметка для не-manual сделки (у manual — внутри TradeForm).
- *
- * Выделено из app/trade/edit.tsx при декомпозиции; запрос, mountedRef
- * и заметка перенесены без изменений.
  */
 export function useEditableTrade(id: string) {
   const [trade, setTrade] = useState<TradeRow | null>(null);

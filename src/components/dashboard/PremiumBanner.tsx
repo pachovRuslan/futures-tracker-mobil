@@ -11,9 +11,6 @@ interface PremiumBannerProps {
 /**
  * PremiumBanner — карточка «Upgrade to Premium» для FREE-юзеров
  * (рисуется только при !isPremium — условие осталось в экране).
- *
- * Выделено из app/(tabs)/index.tsx при декомпозиции; разметка и стили
- * перенесены без изменений.
  */
 export function PremiumBanner({ onPress }: PremiumBannerProps) {
   const { colors } = useTheme();

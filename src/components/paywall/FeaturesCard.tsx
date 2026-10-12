@@ -5,7 +5,7 @@ import { useTheme } from "@/theme/ThemeContext";
 import { StyleSheet, Text, View } from "react-native";
 import type { TranslationKey } from "@/i18n/translations";
 
-/** Только реально существующие возможности Premium (см. REFACTORING.md). */
+/** Реально существующие возможности Premium. */
 const FEATURES: ReadonlyArray<{
   icon: keyof typeof Ionicons.glyphMap;
   titleKey: TranslationKey;
@@ -23,11 +23,7 @@ const FEATURES: ReadonlyArray<{
   },
 ];
 
-/**
- * FeaturesCard — карточка «что входит в Premium». Выделено из
- * app/paywall.tsx при декомпозиции; данные, разметка и стили перенесены
- * без изменений (кроме i18n: тексты теперь по ключам).
- */
+/** FeaturesCard — карточка «что входит в Premium». */
 export function FeaturesCard() {
   const { colors } = useTheme();
   const styles = createStyles(colors);

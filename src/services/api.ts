@@ -11,14 +11,11 @@ import type {
  * REST API клиент — ТОЛЬКО для операций, требующих серверной логики
  * (хранение API-ключей бирж, обращение к биржам от имени сервера).
  *
- * ⚠️ История бага: раньше здесь был полный набор эндпоинтов
- * (/api/trades, /api/balance, /api/goal, /api/sync/:exchange), которого
- * НЕ СУЩЕСТВУЕТ на бэкенде — тот отвечает 307-редиректом на /login
- * (HTML), а не JSON. Чтение данных переведено на прямые запросы к
- * Supabase (RLS), здесь остались только connections.
- *
- * ⚠️ Прежде чем вернуть сюда /api/trades и т.п. — убедитесь, что
- * бэкенд реально имплементирует контракт (см. REFACTORING.md).
+ * Чтение сделок/баланса идёт напрямую в Supabase через RLS —
+ * см. src/hooks/useTrades.ts и src/hooks/useBalanceSnapshots.ts.
+ * Здесь остаются только connections (им нужен сервер — хранение
+ * API-ключей) и sync-мост. Защита от HTML-ответов (307 → /login)
+ * стоит в request(): проверяем content-type перед JSON.parse.
  */
 
 class ApiError extends Error {

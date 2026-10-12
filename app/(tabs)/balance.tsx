@@ -10,14 +10,11 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-nati
 /**
  * Экран «Баланс» — снапшоты спот/фьючерс депозитов.
  *
- * ⚠️ История бага: раньше читал данные с несуществующего REST-энда /
- * api/balance (бэкенд отвечал HTML) и не имел формы добавления — экран
- * вечно показывал «Нет записей» без способа их создать. Теперь чтение
- * и запись идут напрямую в Supabase (RLS), добавление — upsert по
- * (user_id, type, snapshot_date), удаление — долгое нажатие на запись.
+ * Чтение и запись идут напрямую в Supabase (RLS), добавление — upsert
+ * по (user_id, type, snapshot_date), удаление — долгое нажатие на запись.
  *
- * После декомпозиции: данные — useBalanceSnapshots, форма записи —
- * BalanceForm, карточка снапшота — BalanceRow.
+ * Данные — useBalanceSnapshots, форма записи — BalanceForm, карточка
+ * снапшота — BalanceRow.
  */
 export default function BalanceScreen() {
   const { colors } = useTheme();

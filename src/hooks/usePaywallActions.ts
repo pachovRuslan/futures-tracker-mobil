@@ -12,8 +12,7 @@ export type PaywallBusy = "buy" | "restore" | null;
 
 /**
  * Покупочные действия пейволла: покупка, restore, сверка entitlement
- * с сервером. Выделено из app/paywall.tsx при декомпозиции; логика
- * (включая busy/error-состояние) перенесена без изменений.
+ * с сервером.
  */
 export function usePaywallActions(
   /** Выбранный тариф (кнопка «Подписаться» активна только с ним). */

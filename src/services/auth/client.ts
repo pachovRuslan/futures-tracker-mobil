@@ -10,9 +10,6 @@ import { Platform } from "react-native";
 /**
  * client — Supabase-клиент: синглтон getSupabase (таймауты fetch: auth —
  * 60 с, данные — 15 с) и базовые операции сессии (getAccessToken/signOut).
- *
- * Выделено из src/services/auth.ts при декомпозиции бог-сервиса;
- * логика перенесена без изменений.
  */
 
 let supabaseClient: SupabaseClient | null = null;

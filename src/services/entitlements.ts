@@ -12,30 +12,25 @@ const EMPTY: Entitlement = {
 /**
  * Получение entitlement пользователя из БД через Supabase RPC.
  *
- * RPC get_my_entitlement() (миграция 12) объявлен как SECURITY DEFINER,
- * LEFT JOIN-ит auth.users и возвращает ровно одну строку для текущего
- * auth.uid() — включая юзеров без записи в user_entitlements.
+ * RPC get_my_entitlement() (docs/supabase.sql §3c) объявлен как
+ * SECURITY DEFINER, LEFT JOIN-ит auth.users и возвращает ровно одну
+ * строку для текущего auth.uid() — включая юзеров без записи в
+ * user_entitlements.
  *
  * Ключевое поле — is_effective_premium: сервер вычисляет его той же
  * функцией ft_is_effective_premium(), что использует сайт:
  *   is_premium (не истёк) — ТОЛЬКО подписка или ручная выдача.
- * С миграции 13 (разделение allow/premium) allowlist премиумом НЕ
- * считается: он даёт вход на сайт и освобождение от FREE-лимита 50
- * сделок, но не премиум-статус в приложении.
- * Единая правда для обеих платформ — до этого клиент считал только
- * is_premium, и allowlist-юзеры сайта видели в приложении пейволл.
+ * Allowlist премиумом НЕ считается: он даёт вход на сайт и освобождение
+ * от FREE-лимита 50 сделок, но не премиум-статус в приложении.
  */
 export async function fetchEntitlement(): Promise<Entitlement> {
   try {
     const supabase = getSupabase();
 
-    // ⚠️ История оптимизации: раньше здесь стоял getUser() — это СЕТЕВОЙ
-    // запрос валидации JWT на сервере Supabase (~1 RTT). useSubscription
-    // монтируется на КАЖДОМ экране (дашборд, настройки, пейволл,
-    // подключения) — на каждом экране статус премиума задерживался на
-    // 2 последовательных RTT (getUser → RPC). getSession() читает сессию
-    // из локального хранилища (SecureStore) без сети: подлинность токена
-    // всё равно проверяет RLS при самом RPC-запросе.
+    // getSession() читает сессию из локального хранилища (SecureStore)
+    // без сети — useSubscription монтируется на каждом экране, и сетевой
+    // getUser() добавил бы лишний RTT. Подлинность токена проверяет RLS
+    // при самом RPC-запросе.
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -46,21 +41,23 @@ export async function fetchEntitlement(): Promise<Entitlement> {
 
     if (error || !data) return EMPTY;
 
-    const row = Array.isArray(data) ? data[0] : data;
+    // RPC RETURNS TABLE — supabase-js всегда возвращает массив.
+    // Берём первую (и единственную) строку для текущего auth.uid().
+    const row = data[0] ?? null;
     if (!row) return EMPTY;
 
     const isExpired =
       row.expires_at && new Date(row.expires_at).getTime() < Date.now();
 
-    // «Эффективный премиум» от сервера (миграция 12). Fallback — старая
-    // форма ответа (до миграции поле отсутствует → undefined): считаем
-    // сами по is_premium и сроку. Порядок деплоя SQL/клиента не важен.
+    // «Эффективный премиум» от сервера (поле is_effective_premium в RPC).
+    // Fallback: если поле отсутствует (старая БД без миграции) — считаем
+    // сами по is_premium и сроку.
     const isPremium =
       typeof row.is_effective_premium === "boolean"
         ? row.is_effective_premium
         : Boolean(row.is_premium) && !isExpired;
 
-    // Источник статуса (миг 13: allow = вход, premium = подписка):
+    // Источник статуса:
     //   подписка RC      -> granted_by = 'revenuecat:<store>' -> app_store / play_store;
     //   премиум без RC   -> ручная выдача -> manual (даже если юзер заодно
     //                       в allowlist — is_allowlisted источник премиума

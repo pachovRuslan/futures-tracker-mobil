@@ -209,7 +209,7 @@ CREATE POLICY "users_update_own_balance"
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 5. RPC get_trade_stats — агрегаты биржа × месяц для дашборда
---    (миграция 11; без него дашборд молча падает в fallback-расчёт
+--    (без него дашборд молча падает в fallback-расчёт
 --    по последним 500 сделкам — итог занижается при длинной истории)
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -258,3 +258,83 @@ DROP POLICY IF EXISTS "users_delete_own_balance" ON public.balance_snapshots;
 CREATE POLICY "users_delete_own_balance"
   ON public.balance_snapshots FOR DELETE TO authenticated
   USING (user_id = auth.uid());
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 6. Триггер enforce_free_trade_limit — серверная защита FREE-лимита
+--    (BEFORE INSERT): FREE-юзер не может завести больше 50 сделок.
+--    Allowlist-юзеры освобождены от лимита. Источник правды о премиуме —
+--    ft_is_effective_premium() (см. выше), о allowlist — public.allowed_emails.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION public.enforce_free_trade_limit()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  is_premium boolean;
+  is_allowlisted boolean;
+  trade_count bigint;
+BEGIN
+  SELECT public.ft_is_effective_premium(NEW.user_id) INTO is_premium;
+
+  IF is_premium THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1 FROM public.allowed_emails a
+    WHERE a.email = (SELECT u.email FROM auth.users u WHERE u.id = NEW.user_id)
+  ) INTO is_allowlisted;
+
+  IF is_allowlisted THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT count(*) INTO trade_count
+  FROM public.trades t
+  WHERE t.user_id = NEW.user_id;
+
+  IF trade_count >= 50 THEN
+    RAISE EXCEPTION 'FREE_TRADE_LIMIT_REACHED'
+      USING ERRCODE = '23001';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.enforce_free_trade_limit() FROM public, anon;
+
+DROP TRIGGER IF EXISTS trg_enforce_free_trade_limit ON public.trades;
+CREATE TRIGGER trg_enforce_free_trade_limit
+  BEFORE INSERT ON public.trades
+  FOR EACH ROW
+  EXECUTE FUNCTION public.enforce_free_trade_limit();
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 7. RPC delete_my_account — удаление аккаунта (Google Play 5.1.1(v), App Store)
+--    Каскадно сносит auth.users; trades / balance_snapshots / user_entitlements /
+--    exchange_connections удаляются по ON DELETE CASCADE (FK).
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION public.delete_my_account()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  uid uuid := auth.uid();
+BEGIN
+  IF uid IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  DELETE FROM auth.users WHERE id = uid;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.delete_my_account() FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.delete_my_account() TO authenticated;

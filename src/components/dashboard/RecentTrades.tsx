@@ -14,8 +14,7 @@ interface RecentTradesProps {
 
 /**
  * RecentTrades — секция «ПОСЛЕДНИЕ СДЕЛКИ» дашборда: до 6 строк с
- * empty-state. Выделена из app/(tabs)/index.tsx при декомпозиции;
- * разметка и стили перенесены без изменений.
+ * empty-state.
  */
 export function RecentTrades({ trades }: RecentTradesProps) {
   const { colors } = useTheme();

@@ -9,9 +9,6 @@ const BALANCE_SELECT = "id,type,value_usd,snapshot_date,note,created_at";
 /**
  * useBalanceSnapshots — чтение и удаление снапшотов баланса
  * (Supabase, RLS: строки только владельца).
- *
- * Выделено из app/(tabs)/balance.tsx при декомпозиции; запрос,
- * mountedRef и confirmDelete перенесены без изменений.
  */
 export function useBalanceSnapshots() {
   const { t } = useI18n();

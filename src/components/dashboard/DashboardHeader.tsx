@@ -14,9 +14,6 @@ interface DashboardHeaderProps {
 /**
  * DashboardHeader — шапка дашборда: бренд FUTURES_TRACKER + бейдж статуса
  * подписки (как заголовок сайта).
- *
- * Выделено из app/(tabs)/index.tsx при декомпозиции; разметка, логика
- * текста бейджа и стили перенесены без изменений.
  */
 export function DashboardHeader({
   isPremium,
@@ -26,9 +23,8 @@ export function DashboardHeader({
   const { colors } = useTheme();
   const styles = createStyles(colors);
   // Бейдж: PREMIUM · GRANT — ручная выдача, PREMIUM — подписка RC.
-  // Ветки «allowlist» (PREMIUM · BETA) больше нет: с миграции 13 allowlist
-  // премиум не даёт, source у премиума всегда app_store/play_store/manual
-  // (см. src/services/entitlements.ts).
+  // Allowlist премиум не даёт: source у премиума всегда
+  // app_store/play_store/manual (см. src/services/entitlements.ts).
   const premiumBadgeText = useMemo(() => {
     if (subLoading) return "…";
     if (!isPremium) return "FREE";

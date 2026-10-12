@@ -11,10 +11,7 @@ interface RestoreButtonProps {
   onRestore: () => void;
 }
 
-/**
- * RestoreButton — «Восстановить покупки». Выделено из app/paywall.tsx при
- * декомпозиции; разметка и стили перенесены без изменений.
- */
+/** RestoreButton — «Восстановить покупки». */
 export function RestoreButton({ busy, onRestore }: RestoreButtonProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);

@@ -15,9 +15,6 @@ interface TradeSummaryCardProps {
  * Сводка по сделке: символ, биржа, сторона, даты открытия/закрытия и
  * чистый PnL. Для не-manual сделки — единственный контекст: поля
  * перезапишет следующий синк, редактируется только заметка.
- *
- * Выделено из app/trade/edit.tsx при декомпозиции; разметка и стили
- * перенесены без изменений.
  */
 export function TradeSummaryCard({ trade }: TradeSummaryCardProps) {
   const { colors } = useTheme();

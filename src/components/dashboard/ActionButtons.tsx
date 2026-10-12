@@ -18,9 +18,6 @@ interface ActionButtonsProps {
  * ActionButtons — кнопки действий под графиком: «Сделка» и «Биржа».
  * «Биржа» рисуется только при включённой фиче подключений бирж
  * (kill-switch EXCHANGE_CONNECTIONS_ENABLED).
- *
- * Выделено из app/(tabs)/index.tsx при декомпозиции; разметка и стили
- * перенесены без изменений.
  */
 export function ActionButtons({
   onAddTrade,

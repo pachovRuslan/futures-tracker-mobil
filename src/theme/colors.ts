@@ -13,7 +13,9 @@
  *
  * ⚠️ Палитру НЕ импортируют напрямую экраны: цвета приходят из
  * useTheme() (src/theme/ThemeContext.tsx), иначе светлая тема не
- * подхватится. Прямой импорт остался только у web-оболочки (+html.tsx).
+ * подхватится. Прямой импорт остался только у ThemeContext и
+ * web-оболочки +html.tsx (там хардкод hex, чтобы фон появился до
+ * гидрации React).
  */
 export const darkColors = {
   /** Основной фон приложения (как у веба: #0B0F14). */
@@ -66,10 +68,3 @@ export const lightColors: { [K in keyof typeof darkColors]: string } = {
 
 /** Форма одной палитры (ключи обязаны совпадать у dark и light). */
 export type ThemeColors = { [K in keyof typeof darkColors]: string };
-
-/**
- * Совокупная палитра по умолчанию (тёмная). Оставлена для совместимости
- * со старым импортом `import { colors } from "@/theme/colors"` — новые
- * экраны так НЕ пишут, они берут актуальную палитру из useTheme().
- */
-export const colors: ThemeColors = darkColors;

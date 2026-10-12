@@ -22,10 +22,7 @@ interface UseTradeMutationsArgs {
  * useTradeMutations — мутации экрана редактирования сделки: полное
  * обновление manual-сделки, сохранение заметки синканной и удаление
  * manual. Запись идёт напрямую в Supabase — RLS-политики update/delete
- * own trades (миграция 02) пропускают только строки владельца.
- *
- * Выделено из app/trade/edit.tsx при декомпозиции; handleUpdate,
- * handleSaveNotes и handleDelete перенесены без изменений.
+ * own trades (docs/supabase.sql §1) пропускают только строки владельца.
  */
 export function useTradeMutations({ trade, notes }: UseTradeMutationsArgs) {
   const router = useRouter();

@@ -14,10 +14,7 @@ interface BuyButtonProps {
   onBuy: () => void;
 }
 
-/**
- * BuyButton — «Подписаться за <цена>». Выделено из app/paywall.tsx при
- * декомпозиции; разметка и стили перенесены без изменений.
- */
+/** BuyButton — «Подписаться за <цена>». */
 export function BuyButton({ busy, selected, onBuy }: BuyButtonProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);

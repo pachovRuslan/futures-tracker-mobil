@@ -3,10 +3,10 @@
 Мобильное приложение-трекер фьючерсных сделок (Expo / React Native / Expo Router / Supabase).
 
 - **Auth**: Google OAuth + Sign in with Apple (iOS) через Supabase (PKCE)
-- **Данные**: чтение напрямую из Supabase (Row Level Security)
-- **Биржи**: подключение API-ключей через серверный REST API (premium)
-- **Premium**: подписка через встроенную покупку (RevenueCat), сверка —
-  сервером в `user_entitlements`
+- **Данные**: чтение и запись напрямую в Supabase (Row Level Security)
+- **Биржи**: подключение API-ключей и синк сделок через серверный REST API (premium)
+- **Premium**: подписка через встроенную покупку (RevenueCat), сверка — сервером в `user_entitlements`
+- **i18n**: русский + английский, плюрализация, выбор сохраняется
 
 ## Быстрый старт
 
@@ -23,9 +23,9 @@ npx expo start --web   # веб-версия на localhost:8081
 |---|---|
 | `EXPO_PUBLIC_SUPABASE_URL` | URL проекта Supabase (`https://<ref>.supabase.co`) |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | anon key проекта |
-| `EXPO_PUBLIC_API_URL` | REST-бэкенд для подключений бирж (optional) |
-| `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY` | Публичный RC-ключ Google Play (`goog_...`) — покупки в Android |
-| `EXPO_PUBLIC_REVENUECAT_IOS_KEY` | Публичный RC-ключ App Store (`appl_...`) — покупки в iOS |
+| `EXPO_PUBLIC_API_URL` | REST-бэкенд для подключений бирж и сверки Premium |
+| `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY` | Публичный RC-ключ Google Play (`goog_...`) |
+| `EXPO_PUBLIC_REVENUECAT_IOS_KEY` | Публичный RC-ключ App Store (`appl_...`) |
 
 > `EXPO_PUBLIC_*` встраиваются в бандл **в момент сборки**. После изменения
 > `.env` перезапускайте dev-сервер с `--clear`.
@@ -61,7 +61,8 @@ EXPO_PUBLIC_REVENUECAT_IOS_KEY=appl_xxxxxxxxxxxxxxxx
 
 ## Настройка Supabase
 
-1. Выполните `docs/supabase.sql` в SQL Editor (идемпотентно).
+1. Выполните `docs/supabase.sql` в SQL Editor (идемпотентно — включает
+   все таблицы, RLS-политики, RPC и триггеры).
 2. Authentication → Providers → Google: включите и укажите
    `https://<ref>.supabase.co/auth/v1/callback` в Google Cloud Console
    (тип клиента «Web application»).
@@ -97,27 +98,82 @@ dev-сервера при каждом нативном логине (`[Auth] re
 >      `futurestracker://auth/callback`, работает как в проде.
 >
 > В Expo Go с LAN-IP приложение покажет понятную ошибку с этими же
-> подсказками (см. `src/services/auth.ts` → `signInWithGoogle`).
+> подсказками (см. `src/services/auth/oauth.ts` → `signInWithGoogle`).
 
 ## Структура
 
 ```
-app/                    # экраны (expo-router)
-  _layout.tsx           # root layout: AuthProvider + guard навигации
-  login.tsx             # вход через Google
-  auth/callback.tsx     # OAuth callback (cold/warm start)
-  (tabs)/               # Дашборд / Сделки / Баланс / Настройки
-  trade/new.tsx         # ручное добавление сделки
-  connections.tsx       # подключение бирж (premium, REST)
-  paywall.tsx           # экран Premium
+app/                        # экраны (expo-router)
+  _layout.tsx               # root: ErrorBoundary + I18nProvider + ThemeProvider
+                            #       + AuthProvider + guard навигации
+  login.tsx                 # вход через Google / Sign in with Apple
+  auth/callback.tsx         # OAuth callback (cold/warm start)
+  +html.tsx                 # веб-оболочка (только web)
+  +not-found.tsx            # 404
+  (tabs)/
+    _layout.tsx             # нижняя навигация
+    index.tsx               # Дашборд
+    trades.tsx              # Сделки
+    balance.tsx             # Баланс
+    settings.tsx            # Настройки
+  trade/new.tsx             # ручное добавление сделки
+  trade/edit.tsx            # редактирование сделки / заметки
+  connections.tsx           # подключение бирж (premium, REST)
+  paywall.tsx               # экран Premium
+
 src/
-  services/auth.ts      # Supabase client (lazy) + OAuth flow
-  services/api.ts       # REST клиент (только connections)
-  services/entitlements.ts
-  context/AuthContext.tsx
-  hooks/                # useTrades, useSubscription
-  shared/               # типы, константы, чистая логика расчётов
-docs/supabase.sql       # схема БД + RLS
+  services/
+    auth/                   # Supabase-клиент, OAuth Google, Sign in with Apple,
+                            #   персистентность сессии (chunked SecureStore)
+      index.ts              # баррель — публичный API модуля
+      client.ts             # lazy singleton getSupabase(), signOut, getAccessToken
+      oauth.ts               # OAuth-флоу Google (PKCE), redirect URI, exchangeCodeOnce
+      apple.ts              # Sign in with Apple
+      storage.ts            # safeStorage (web localStorage / native SecureStore с чанками)
+    api.ts                  # REST-клиент: connections + sync-bridge
+    entitlements.ts         # RPC get_my_entitlement + кэш 60с
+    purchases.ts            # мост RevenueCat ↔ сервер (initPurchases, sync, packages)
+  context/
+    AuthContext.tsx         # единый AuthProvider, onAuthStateChange, init/reset RC
+  hooks/
+    useTrades.ts            # список сделок (Supabase)
+    useBalanceSnapshots.ts  # снапшоты баланса + удаление
+    useSubscription.ts      # статус Premium с кэшем
+    useEditableTrade.ts     # загрузка сделки для редактирования
+    useTradeMutations.ts    # update / saveNotes / delete
+    useDashboardStats.ts    # агрегаты + ряд графика (RPC + fallback)
+    useDashboardSync.ts     # ручной синк с биржами с дашборда
+    useConnectionsSync.ts   # ручной синк с экрана подключений
+    usePaywallActions.ts    # покупка / restore / сверка
+  components/
+    TradeForm.tsx           # общая форма сделки (новая + редактирование)
+    TrendLoader.tsx         # анимация загрузки
+    LoadingScreen.tsx
+    ErrorBoundary.tsx
+    balance/                # BalanceForm, BalanceRow
+    connections/            # AddConnectionForm, ExchangeRow, SyncAllBox, premiumAlert
+    dashboard/              # DashboardHeader, HeroCard, StatsGrid, PnlChart,
+                            #   RecentTrades, ActionButtons, PremiumBanner,
+                            #   ExchangeFilterChips
+    paywall/                # PlansCard, BuyButton, RestoreButton, FeaturesCard, LegalNote
+    trade/                  # TradeSummaryCard, TradeNotesForm
+  i18n/
+    index.ts                # модульный уровень: locale, t(), plural()
+    I18nContext.tsx         # провайдер + хук useI18n (с деградацией без провайдера)
+    LanguageSelect.tsx      # сегмент выбора языка
+    translations.ts         # словари ru/en с типизированными ключами
+  theme/
+    colors.ts               # тёмная и светлая палитры, тип ThemeColors
+    ThemeContext.tsx        # провайдер + хук useTheme (с деградацией)
+  shared/
+    config.ts               # env-переменные, kill-switch фич, лимиты
+    types.ts                # доменные типы (Trade, Balance, Connection, Entitlement)
+    trade-model.ts          # чистые функции: net P&L, форматирование чисел/дат
+    datetime.ts             # парсинг "YYYY-MM-DD HH:MM" → ISO
+
+docs/
+  supabase.sql              # полная схема БД: таблицы, RLS, RPC, триггеры
+  BILLING.md                # настройка и тест-план биллинга
 ```
 
 ## Скрипты
@@ -136,7 +192,5 @@ pnpm lint         # expo lint
    «Callback URL is allowed» / 403 — redirect URI не добавлен в Supabase
    (см. таблицу выше).
 3. Если вход проходит, но после перезапуска приложение «забывает»
-   сессию — см. чанкование SecureStore в `src/services/auth.ts`
+   сессию — см. чанкование SecureStore в `src/services/auth/storage.ts`
    (лимит 2048 байт на значение).
-
-Подробный отчёт о найденных и исправленных багах: `REFACTORING.md`.
