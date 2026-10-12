@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "@/i18n/I18nContext";
+import type { Exchange } from "@/shared/types";
 import { exchangeLabel } from "@/shared/types";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
@@ -9,9 +10,9 @@ interface ExchangeFilterChipsProps {
   /** Уникальные биржи с данными (из useDashboardStats). */
   exchanges: string[];
   /** Активный фильтр: "all" или код биржи. */
-  exchangeFilter: string;
-  /** Выбор фильтра (тап по чипу). */
-  onChange: (exchange: string) => void;
+  exchangeFilter: Exchange | "all";
+  /** Выбор фильтра (тап по чипу). Принимает код биржи; "all" — снять фильтр. */
+  onChange: (exchange: Exchange | "all") => void;
 }
 
 /**
@@ -59,7 +60,7 @@ export function ExchangeFilterChips({
               styles.chip,
               exchangeFilter === ex && styles.chipActive,
             ]}
-            onPress={() => onChange(ex)}
+            onPress={() => onChange(ex as Exchange)}
           >
             {exchangeFilter === ex && (
               <Ionicons name="checkmark" size={13} color={colors.accent} />

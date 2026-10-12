@@ -61,7 +61,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: colors.accent + "20",
+    // Используем готовый dim-цвет из палитры, а не конкатенацию
+    // hex-alpha (colors.accent + "20") — та ломается при 3-char hex.
+    backgroundColor: colors.accentDim,
     justifyContent: "center",
     alignItems: "center",
     flexShrink: 0,

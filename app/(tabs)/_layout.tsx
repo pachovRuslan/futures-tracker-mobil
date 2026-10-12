@@ -8,12 +8,26 @@ import type { ColorValue } from "react-native";
  * Иконка нижней навигации. Библиотека @expo/vector-icons подключена
  * осознанно: юникод-глифы (✓, ↻) отсутствуют в Roboto, и React Native
  * на Android не делает font-fallback — вместо иконки рисуется tofu-бокс.
+ *
+ * Четыре иконки предвычислены на уровне модуля, чтобы `tabBarIcon` не
+ * создавал новый колбэк на каждом рендере `TabsLayout` (это ре-рендерит
+ * таб-бар без нужды).
  */
-const tabIcon =
-  (name: keyof typeof Ionicons.glyphMap) =>
-  ({ color, size }: { color: ColorValue; size: number }) => (
+type TabIconProps = { color: ColorValue; size: number };
+type TabIconComponent = (props: TabIconProps) => React.JSX.Element;
+
+const makeTabIcon = (name: keyof typeof Ionicons.glyphMap): TabIconComponent => {
+  const Icon = ({ color, size }: TabIconProps) => (
     <Ionicons name={name} size={size - 2} color={color} />
   );
+  Icon.displayName = `TabIcon(${String(name)})`;
+  return Icon;
+};
+
+const DashboardIcon = makeTabIcon("stats-chart");
+const TradesIcon = makeTabIcon("swap-horizontal");
+const BalanceIcon = makeTabIcon("wallet");
+const SettingsIcon = makeTabIcon("settings");
 
 export default function TabsLayout() {
   const { colors } = useTheme();
@@ -40,20 +54,20 @@ export default function TabsLayout() {
         options={{
           title: t("tabs.dashboard"),
           headerShown: false,
-          tabBarIcon: tabIcon("stats-chart"),
+          tabBarIcon: DashboardIcon,
         }}
       />
       <Tabs.Screen
         name="trades"
-        options={{ title: t("tabs.trades"), tabBarIcon: tabIcon("swap-horizontal") }}
+        options={{ title: t("tabs.trades"), tabBarIcon: TradesIcon }}
       />
       <Tabs.Screen
         name="balance"
-        options={{ title: t("tabs.balance"), tabBarIcon: tabIcon("wallet") }}
+        options={{ title: t("tabs.balance"), tabBarIcon: BalanceIcon }}
       />
       <Tabs.Screen
         name="settings"
-        options={{ title: t("tabs.settings"), tabBarIcon: tabIcon("settings") }}
+        options={{ title: t("tabs.settings"), tabBarIcon: SettingsIcon }}
       />
     </Tabs>
   );

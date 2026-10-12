@@ -37,10 +37,12 @@ export default function EditTradeScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const { t } = useI18n();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id } = useLocalSearchParams<{ id?: string }>();
   const router = useRouter();
 
-  const { trade, loading, loadError, notes, setNotes } = useEditableTrade(id);
+  const { trade, loading, loadError, notes, setNotes } = useEditableTrade(
+    id ?? "",
+  );
 
   const { saving, handleUpdate, handleSaveNotes, handleDelete } =
     useTradeMutations({ trade, notes });

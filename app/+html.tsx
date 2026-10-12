@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 // web page during static rendering.
 export default function Root({ children }: { children: ReactNode }) {
   return (
-    <html lang="ru">
+    <html lang="ru" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
@@ -16,6 +16,21 @@ export default function Root({ children }: { children: ReactNode }) {
         <meta name="theme-color" content="#0a0d12" />
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: responsiveBackground }} />
+        {/* lang ставится из localStorage (I18nProvider хранит выбор там же).
+            suppressHydrationWarning — чтобы React не ругался на mismatch
+            между «ru» выше и значением из скрипта после гидрации. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                var v = localStorage.getItem('futures-tracker-locale');
+                if (v === 'en' || v === 'ru') {
+                  document.documentElement.lang = v;
+                }
+              } catch (e) {}
+            `,
+          }}
+        />
       </head>
       <body>{children}</body>
     </html>

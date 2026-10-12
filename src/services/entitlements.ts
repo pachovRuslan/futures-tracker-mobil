@@ -95,22 +95,46 @@ export async function fetchEntitlement(): Promise<Entitlement> {
  * выполнял RPC-запрос заново. 60 секунд максимума устаревания
  * self-healing: следующая навигация через минуту всё увидит.
  *
+ * Кэш ключуется по user.id: если пользователь A (premium) разлогинился
+ * и в течение TTL залогинился пользователь B, кэш не подсунет B
+ * entitlement пользователя A.
+ *
  * force=true — обход кэша (для явного refresh после покупки/выдачи).
  */
 const ENTITLEMENT_CACHE_TTL_MS = 60_000;
-let entitlementCache: { at: number; value: Entitlement } | null = null;
+let entitlementCache: { at: number; userId: string; value: Entitlement } | null = null;
 
 export async function checkPremiumStatus(
   force = false,
 ): Promise<Entitlement> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    // Без сессии — нет и статуса. Не кэшируем EMPTY, чтобы при логине
+    // сразу пошёл реальный запрос.
+    entitlementCache = null;
+    return EMPTY;
+  }
+
   if (
     !force &&
     entitlementCache &&
+    entitlementCache.userId === userId &&
     Date.now() - entitlementCache.at < ENTITLEMENT_CACHE_TTL_MS
   ) {
     return entitlementCache.value;
   }
   const value = await fetchEntitlement();
-  entitlementCache = { at: Date.now(), value };
+  entitlementCache = { at: Date.now(), userId, value };
   return value;
+}
+
+async function getCurrentUserId(): Promise<string | null> {
+  try {
+    const {
+      data: { session },
+    } = await getSupabase().auth.getSession();
+    return session?.user?.id ?? null;
+  } catch {
+    return null;
+  }
 }

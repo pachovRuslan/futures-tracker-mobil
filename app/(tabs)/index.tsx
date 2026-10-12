@@ -12,6 +12,7 @@ import { useDashboardSync } from "@/hooks/useDashboardSync";
 import { useI18n } from "@/i18n/I18nContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { FREE_TRADE_LIMIT } from "@/shared/config";
+import type { Exchange } from "@/shared/types";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
 import { useRouter } from "expo-router";
@@ -42,7 +43,7 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const { isPremium, entitlement, loading: subLoading } = useSubscription();
 
-  const [exchangeFilter, setExchangeFilter] = useState<string>("all");
+  const [exchangeFilter, setExchangeFilter] = useState<Exchange | "all">("all");
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
 
   const {

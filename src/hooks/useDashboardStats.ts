@@ -3,7 +3,7 @@ import { useI18n } from "@/i18n/I18nContext";
 import { getSupabase } from "@/services/auth";
 import { TRADES_PAGE_SIZE } from "@/shared/config";
 import type { TranslationKey } from "@/i18n/translations";
-import type { TradeRow } from "@/shared/types";
+import type { Exchange, TradeRow } from "@/shared/types";
 import { tradeNetPnl } from "@/shared/trade-model";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -185,7 +185,7 @@ export interface UseDashboardStatsResult {
  * бар-чарта.
  */
 export function useDashboardStats(
-  exchangeFilter: string,
+  exchangeFilter: Exchange | "all",
   selectedMonth: string | null,
 ): UseDashboardStatsResult {
   const { user } = useAuth();

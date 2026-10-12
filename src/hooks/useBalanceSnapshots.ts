@@ -9,6 +9,10 @@ const BALANCE_SELECT = "id,type,value_usd,snapshot_date,note,created_at";
 /**
  * useBalanceSnapshots — чтение и удаление снапшотов баланса
  * (Supabase, RLS: строки только владельца).
+ *
+ * Защита от race conditions: обновляет state только последний по счёту
+ * запрос (requestIdRef). Таймауты fetch настраиваются в getSupabase()
+ * (см. src/services/auth/client.ts → fetchWithTimeout).
  */
 export function useBalanceSnapshots() {
   const { t } = useI18n();
@@ -17,8 +21,10 @@ export function useBalanceSnapshots() {
   const [error, setError] = useState<string | null>(null);
 
   const mountedRef = useRef(true);
+  const requestIdRef = useRef(0);
 
   const load = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -27,13 +33,17 @@ export function useBalanceSnapshots() {
         .select(BALANCE_SELECT)
         .order("snapshot_date", { ascending: false });
       if (dbError) throw new Error(dbError.message);
-      if (mountedRef.current) setSnapshots((data ?? []) as BalanceSnapshot[]);
+      if (mountedRef.current && requestId === requestIdRef.current) {
+        setSnapshots((data ?? []) as BalanceSnapshot[]);
+      }
     } catch (e) {
-      if (mountedRef.current) {
+      if (mountedRef.current && requestId === requestIdRef.current) {
         setError(e instanceof Error ? e.message : String(e));
       }
     } finally {
-      if (mountedRef.current) setLoading(false);
+      if (mountedRef.current && requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, []);
 
