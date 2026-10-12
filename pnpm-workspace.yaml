@@ -13,3 +13,7 @@ overrides:
 
 # EAS игнорирует .npmrc minimumReleaseAge, использует свою политику.
 # Отключаем через EXPO_NO_SUPPLY_CHAIN_POLICY=1 в eas.json env.
+# pnpm v10 (на EAS) читает разрешённые build-скрипты отсюда,
+# а не из package.json (pnpm.onlyBuiltDependencies устарел).
+onlyBuiltDependencies:
+  - unrs-resolver
