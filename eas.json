@@ -35,6 +35,9 @@
       },
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_NO_SUPPLY_CHAIN_POLICY": "1"
       }
     }
   },
