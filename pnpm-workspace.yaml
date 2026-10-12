@@ -1,6 +1,16 @@
 packages:
   - "."
 
+# Allowlist пакетов, которым разрешён postinstall-скрипт.
+# pnpm 9+ по умолчанию блокирует build-скрипты транзитивных зависимостей
+# (security-фича); в --frozen-lockfile режиме блокировка = non-zero exit,
+# что роняет EAS Build. unrs-resolver нужен eslint-import-resolver'у
+# (часть eslint-config-expo) — компилит native binary под платформу.
+# pnpm v10 (на EAS) читает разрешённые build-скрипты отсюда, а не из
+# package.json (pnpm.onlyBuiltDependencies устарел, см. https://pnpm.io/settings).
+onlyBuiltDependencies:
+  - unrs-resolver
+
 overrides:
   browserslist: 4.28.0
   # Понижаем версии пакетов, которые EAS supply-chain policy считает "слишком свежими".
@@ -13,7 +23,3 @@ overrides:
 
 # EAS игнорирует .npmrc minimumReleaseAge, использует свою политику.
 # Отключаем через EXPO_NO_SUPPLY_CHAIN_POLICY=1 в eas.json env.
-# pnpm v10 (на EAS) читает разрешённые build-скрипты отсюда,
-# а не из package.json (pnpm.onlyBuiltDependencies устарел).
-onlyBuiltDependencies:
-  - unrs-resolver
