@@ -1,22 +1,15 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "@/i18n/I18nContext";
 import { useTheme } from "@/theme/ThemeContext";
+import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import type { ColorValue } from "react-native";
 
-/**
- * Иконка нижней навигации. Библиотека @expo/vector-icons подключена
- * осознанно: юникод-глифы (✓, ↻) отсутствуют в Roboto, и React Native
- * на Android не делает font-fallback — вместо иконки рисуется tofu-бокс.
- *
- * Четыре иконки предвычислены на уровне модуля, чтобы `tabBarIcon` не
- * создавал новый колбэк на каждом рендере `TabsLayout` (это ре-рендерит
- * таб-бар без нужды).
- */
 type TabIconProps = { color: ColorValue; size: number };
 type TabIconComponent = (props: TabIconProps) => React.JSX.Element;
 
-const makeTabIcon = (name: keyof typeof Ionicons.glyphMap): TabIconComponent => {
+const makeTabIcon = (
+  name: keyof typeof Ionicons.glyphMap,
+): TabIconComponent => {
   const Icon = ({ color, size }: TabIconProps) => (
     <Ionicons name={name} size={size - 2} color={color} />
   );

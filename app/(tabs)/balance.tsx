@@ -5,17 +5,14 @@ import { useBalanceSnapshots } from "@/hooks/useBalanceSnapshots";
 import { useI18n } from "@/i18n/I18nContext";
 import type { ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-/**
- * Экран «Баланс» — снапшоты спот/фьючерс депозитов.
- *
- * Чтение и запись идут напрямую в Supabase (RLS), добавление — upsert
- * по (user_id, type, snapshot_date), удаление — долгое нажатие на запись.
- *
- * Данные — useBalanceSnapshots, форма записи — BalanceForm, карточка
- * снапшота — BalanceRow.
- */
 export default function BalanceScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
@@ -79,39 +76,40 @@ export default function BalanceScreen() {
   );
 }
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: colors.bg,
-    gap: 12,
-    padding: 24,
-  },
-  muted: { color: colors.textMuted, fontSize: 13 },
-  errorTitle: { fontSize: 16, fontWeight: "600", color: colors.text },
-  retryButton: {
-    marginTop: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: colors.accent,
-  },
-  retryButtonText: { color: "#fff", fontWeight: "600", fontSize: 13 },
-  title: {
-    fontSize: 11,
-    textTransform: "uppercase",
-    color: colors.textFaint,
-    letterSpacing: 1,
-    marginBottom: 12,
-    marginTop: 8,
-  },
-  empty: { color: colors.textFaint, textAlign: "center", padding: 20 },
-  hint: {
-    fontSize: 11,
-    color: colors.textFaint,
-    textAlign: "center",
-    marginTop: 16,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.bg },
+    center: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.bg,
+      gap: 12,
+      padding: 24,
+    },
+    muted: { color: colors.textMuted, fontSize: 13 },
+    errorTitle: { fontSize: 16, fontWeight: "600", color: colors.text },
+    retryButton: {
+      marginTop: 8,
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      borderRadius: 8,
+      backgroundColor: colors.accent,
+    },
+    retryButtonText: { color: "#fff", fontWeight: "600", fontSize: 13 },
+    title: {
+      fontSize: 11,
+      textTransform: "uppercase",
+      color: colors.textFaint,
+      letterSpacing: 1,
+      marginBottom: 12,
+      marginTop: 8,
+    },
+    empty: { color: colors.textFaint, textAlign: "center", padding: 20 },
+    hint: {
+      fontSize: 11,
+      color: colors.textFaint,
+      textAlign: "center",
+      marginTop: 16,
+    },
+  });

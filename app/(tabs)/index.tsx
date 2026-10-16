@@ -9,8 +9,8 @@ import { StatsGrid } from "@/components/dashboard/StatsGrid";
 import { TrendLoader } from "@/components/TrendLoader";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { useDashboardSync } from "@/hooks/useDashboardSync";
-import { useI18n } from "@/i18n/I18nContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useI18n } from "@/i18n/I18nContext";
 import { FREE_TRADE_LIMIT } from "@/shared/config";
 import type { Exchange } from "@/shared/types";
 import type { ThemeColors } from "@/theme/colors";
@@ -27,14 +27,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-/**
- * DashboardScreen — экран «Главная»: каркас дашборда. Данные и агрегаты —
- * в useDashboardStats, ручной синк с биржами — в useDashboardSync, шапка —
- * DashboardHeader, hero-карточка — HeroCard, апгрейд-баннер — PremiumBanner,
- * сетка статистики — StatsGrid, фильтр бирж — ExchangeFilterChips, график —
- * PnlChart, список сделок — RecentTrades, кнопки действий — ActionButtons.
- * Здесь осталось: ранние состояния, pull-to-refresh и раскладка.
- */
 export default function DashboardScreen() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
@@ -77,11 +69,6 @@ export default function DashboardScreen() {
   }, [isPremium, totalCount, router]);
 
   const handleAddExchange = useCallback(() => {
-    // На пейволл отправляем только когда УВЕРЕНЫ, что юзер FREE. Пока
-    // entitlement грузится, isPremium === false — без проверки loading'а
-    // премиум-юзера зря отбрасывало на пейволл, а тот его отфутболивал
-    // обратно («Premium активен, перенаправляем…»). Пока статус грузится —
-    // идём на экран: его гейт сам дождётся статуса и примет решение.
     if (!subLoading && !isPremium) {
       router.push("/paywall");
       return;
@@ -146,7 +133,6 @@ export default function DashboardScreen() {
         onSync={handleSync}
       />
 
-      {/* Чипы фильтра бирж */}
       {exchanges.length > 1 && (
         <ExchangeFilterChips
           exchanges={exchanges}
@@ -155,7 +141,6 @@ export default function DashboardScreen() {
         />
       )}
 
-      {/* Сетка статистики 3×3 (месяц + всё время, как на вебе) */}
       <StatsGrid
         month={month}
         allTime={allTime}
@@ -164,8 +149,6 @@ export default function DashboardScreen() {
         onResetMonth={() => setSelectedMonth(null)}
       />
 
-      {/* Бар-чарт PnL по месяцам: при >6 месяцах — горизонтальный скролл,
-          чтобы график «расширялся» как на сайте */}
       <PnlChart
         monthly={monthly}
         selectedMonth={selectedMonth}
@@ -179,31 +162,31 @@ export default function DashboardScreen() {
         isPremium={isPremium}
       />
 
-      {/* Последние сделки */}
       <RecentTrades trades={filteredRecent} />
     </ScrollView>
   );
 }
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: 16, paddingBottom: 32, gap: 16 },
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: colors.bg,
-    gap: 12,
-    padding: 24,
-  },
-  muted: { color: colors.textMuted, fontSize: 13 },
-  errorTitle: { fontSize: 16, fontWeight: "600", color: colors.text },
-  retryButton: {
-    marginTop: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: colors.accent,
-  },
-  retryButtonText: { color: "#fff", fontWeight: "600", fontSize: 13 },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.bg },
+    content: { padding: 16, paddingBottom: 32, gap: 16 },
+    center: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.bg,
+      gap: 12,
+      padding: 24,
+    },
+    muted: { color: colors.textMuted, fontSize: 13 },
+    errorTitle: { fontSize: 16, fontWeight: "600", color: colors.text },
+    retryButton: {
+      marginTop: 8,
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      borderRadius: 8,
+      backgroundColor: colors.accent,
+    },
+    retryButtonText: { color: "#fff", fontWeight: "600", fontSize: 13 },
+  });
